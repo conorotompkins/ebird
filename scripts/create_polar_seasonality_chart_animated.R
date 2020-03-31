@@ -9,12 +9,6 @@ library(gganimate)
 
 theme_set(theme_ipsum())
 
-Sys.setenv(EBIRD_KEY = "Your-midtdb0i0l8e")
-
-#ebirdhistorical(loc = 'US-VA-003', date = '2019-02-14',max = 10, key = "midtdb0i0l8e")
-
-#df_freq <- ebirdfreq(loctype = 'states', loc = 'US-PA', key = "midtdb0i0l8e")
-
 df_freq_raw <- ebirdfreq(loctype = 'states', loc = 'US-PA', startyear = 2019,
                          endyear = 2019, startmonth = 1, endmonth = 12)
 
