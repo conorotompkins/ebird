@@ -38,12 +38,9 @@ graph_object <- df_pairs %>%
   filter(!node_is_isolated())
 
 plot <- graph_object %>% 
-  mutate(name_label = case_when(str_detect(name, "Woodpecker") ~ name,
-                                TRUE ~ as.character(NA))) %>% 
-  ggraph() +
+    ggraph() +
     geom_edge_link(aes(width = n, alpha = n)) +
-    geom_node_point(aes(shape = !is.na(name_label))) +
-    geom_node_label(aes(label = name_label), repel =  TRUE) +
+    geom_node_point() +
     scale_edge_alpha(range = c(.1, .7)) +
     scale_edge_width(range = c(.3, 2)) +
     scale_shape_manual(values = c(1, 19)) +
