@@ -23,7 +23,7 @@ df_counts <- df %>%
 df_counts
 
 df_pairs <- df %>% 
-  filter(common_name != "gull sp.") %>% 
+  #filter(common_name != "gull sp.") %>% 
   pairwise_count(common_name, observation_event_id, wt = observation_count, diag = FALSE, upper = FALSE) %>% 
   arrange(desc(n)) %>% 
   drop_na(n)
@@ -39,32 +39,35 @@ graph_object <- df_pairs %>%
 
 species_list <- c("Northern Cardinal", "Blue Jay")
 
-species_nodes <- graph_object %>% 
+df_species_nodes <- graph_object %>% 
   activate(nodes) %>% 
   as_tibble() %>% 
   mutate(node_id = row_number()) %>% 
-  filter(name %in% species_list) %>% 
-  pull(node_id)
+  filter(name %in% species_list)
+
 
 plot <- graph_object %>% 
   activate(nodes) %>% 
   mutate(name_label = case_when(name %in% species_list ~ name,
                                 TRUE ~ as.character(NA))) %>% 
   activate(edges) %>% 
-  mutate(species_flag = case_when(from %in% species_nodes | to %in% species_nodes ~ TRUE,
-                                  TRUE ~ FALSE)) %>% 
+  left_join(df_species_nodes, by = c("from" = "node_id", "to" = "node_id")) %>% 
+  mutate(species_flag = case_when(from %in% df_species_nodes$node_id | to %in% df_species_nodes$node_id ~ TRUE,
+                                  TRUE ~ FALSE),
+         name = case_when(is.na(name) ~ "Other species",
+                          TRUE ~ name)) %>%
   ggraph() +
-  geom_edge_link(aes(width = n, alpha = species_flag, color = species_flag)) +
-  geom_node_point(aes(shape = !is.na(name_label))) +
-  geom_node_label(aes(label = name_label), repel =  TRUE) +
-  #facet_nodes(~name_label) +
-  scale_edge_alpha_discrete(range = c(.1, .5)) +
-  scale_edge_color_manual(values = c("black", "red")) +
-  scale_edge_width(range = c(.3, 3)) +
-  scale_shape_manual(values = c(1, 19)) +
-  theme_void()
+    geom_edge_link(aes(width = n, color = name, alpha = species_flag)) +
+    geom_node_point(aes(shape = !is.na(name_label))) +
+    geom_node_label(aes(label = name_label), repel =  TRUE) +
+    #facet_nodes(~name_label) +
+    scale_edge_alpha_discrete(range = c(0.1, 1)) +
+    scale_edge_color_manual(values = c("blue", "red", "black")) +
+    scale_edge_width(range = c(.3, 3)) +
+    scale_shape_manual(values = c(1, 19)) +
+    theme_void()
 
-#plot  
+plot  
 
 plot %>% 
-  ggsave(filename = "output/network_graph_species_flag.png")
+  ggsave(filename = "output/network_graph_species_flag.png", width = 10, height = 10)
