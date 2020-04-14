@@ -23,7 +23,7 @@ df_counts <- df %>%
 df_counts
 
 df_pairs <- df %>% 
-  filter(common_name != "gull sp.") %>% 
+  #filter(common_name != "gull sp.") %>% 
   pairwise_count(common_name, observation_event_id, wt = observation_count, diag = FALSE, upper = FALSE) %>% 
   arrange(desc(n)) %>% 
   drop_na(n)
@@ -33,21 +33,49 @@ df_pairs
 graph_object <- df_pairs %>% 
   as_tbl_graph(directed = FALSE) %>% 
   activate(edges) %>% 
-  filter(n > 100) %>% 
+  filter(n > 50) %>% 
   activate(nodes) %>% 
-  filter(!node_is_isolated())
+  filter(!node_is_isolated()) %>% 
+  left_join(df_counts, by = c("name" = "common_name"))
 
 plot <- graph_object %>% 
     ggraph() +
     geom_edge_link(aes(width = n, alpha = n)) +
-    geom_node_point() +
-    scale_edge_alpha(range = c(.1, .7)) +
-    scale_edge_width(range = c(.3, 2)) +
-    scale_shape_manual(values = c(1, 19)) +
+    geom_node_point(aes(size = species_count, alpha = species_count)) +
+    scale_size_continuous("Total observations", labels = scales::comma) +
+    scale_alpha_continuous("Total observations", labels = scales::comma) +
+    scale_edge_alpha("Observations together", range = c(.1, .7), labels = scales::comma) +
+    scale_edge_width("Observations together", range = c(.3, 2), labels = scales::comma) +
     theme_void()
 
 plot  
 
 plot %>% 
   ggsave(filename = "output/network_graph_top_species.png")
+
+graph_object %>% 
+  activate(nodes) %>% 
+  #mutate(group = as.factor(group_infomap())) %>% 
+  mutate(group = as.factor(group_edge_betweenness())) %>% 
+  as_tibble() %>% 
+  View()
+
+plot_groups <- graph_object %>% 
+  # activate(nodes) %>% 
+  # mutate(group = as.factor(group_edge_betweenness())) %>% 
+  activate(edges) %>% 
+  mutate(group = as.factor(group_biconnected_component())) %>% 
+  ggraph() +
+    geom_edge_density(aes(fill = group)) +
+    geom_edge_link(aes(width = n, alpha = n, color = group)) +
+    geom_node_point(aes(size = species_count, alpha = species_count)) +
+    scale_size_continuous("Total observations", labels = scales::comma) +
+    scale_alpha_continuous("Total observations", labels = scales::comma) +
+    scale_edge_alpha("Observations together", range = c(.1, .7), labels = scales::comma) +
+    scale_edge_width("Observations together", range = c(.3, 2), labels = scales::comma) +
+    guides(edge_color = FALSE, edge_fill = FALSE) +
+    theme_void()
+
+plot_groups %>% 
+  ggsave(filename = "output/network_graph_attempt_color_fill.png")
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
