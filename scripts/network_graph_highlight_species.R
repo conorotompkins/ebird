@@ -33,6 +33,7 @@ df %>%
     geom_line()
 
 df_pair_count <- df %>% 
+  filter(year(observation_date) >= 2016) %>% 
   #filter(common_name != "gull sp.") %>% 
   pairwise_count(common_name, observation_event_id, wt = observation_count, diag = FALSE, upper = FALSE) %>% 
   arrange(desc(n)) %>% 
@@ -40,15 +41,7 @@ df_pair_count <- df %>%
 
 df_pair_count
 
-df_pair_corr <- df %>% 
-  pairwise_cor(common_name, observation_event_id, diag = FALSE, upper = FALSE)
 
-df_pair_corr %>% 
-  arrange(desc(correlation))
-
-df_pair_corr %>% 
-  ggplot(aes(correlation)) +
-    geom_density()
 
 #count
 graph_object_count <- df_pair_count %>% 
@@ -60,7 +53,7 @@ graph_object_count <- df_pair_count %>%
 
 species_list <- c("Northern Cardinal", "Blue Jay")
 
-df_species_count_nodes <- graph_object %>% 
+df_species_count_nodes <- graph_object_count %>% 
   activate(nodes) %>% 
   as_tibble() %>% 
   mutate(node_id = row_number()) %>% 
@@ -77,14 +70,18 @@ plot_count <- graph_object_count %>%
          name = case_when(is.na(name) ~ "Other species",
                           TRUE ~ name)) %>%
   ggraph() +
-    geom_edge_link(aes(width = n, color = name, alpha = species_flag)) +
-    geom_node_point(aes(shape = !is.na(name_label))) +
-    geom_node_label(aes(label = name_label), repel =  TRUE) +
+    geom_edge_link(aes(width = n, alpha = species_flag)) +
+    geom_node_point(aes(shape = !is.na(name_label), size = !is.na(name_label), color = name_label)) +
+    geom_node_label(aes(label = name_label, color = name_label), repel =  TRUE) +
     #facet_nodes(~name_label) +
-    scale_edge_alpha_discrete(range = c(0.1, 1)) +
-    scale_edge_color_manual(values = c("blue", "red", "black")) +
-    scale_edge_width(range = c(.3, 3)) +
+    scale_edge_alpha_discrete(range = c(0.01, .5)) +
+    scale_edge_width("Number of shared observations") +
     scale_shape_manual(values = c(1, 19)) +
+    scale_size_manual(values = c(2, 3)) +
+    scale_color_discrete("Species", breaks = c("Blue Jay", "Northern Cardinal", "Other species")) +
+    guides(edge_alpha = FALSE,
+           size = FALSE,
+           shape = FALSE) +
     theme_void()
 
 plot_count  
@@ -93,10 +90,27 @@ plot_count %>%
   ggsave(filename = "output/network_graph_count_species_flag.png", width = 10, height = 10)
 
 #corr
+df_counts %>%
+  top_frac(.5) %>% 
+  arrange(species_count)
+
+df_pair_corr <- df %>% 
+  semi_join(df_counts %>%
+              top_frac(.5) %>% 
+              arrange(species_count)) %>% 
+  pairwise_cor(common_name, observation_event_id, diag = FALSE, upper = FALSE)
+
+df_pair_corr %>% 
+  arrange(desc(correlation))
+
+df_pair_corr %>% 
+  ggplot(aes(correlation)) +
+  geom_density()
+
 graph_object_corr <- df_pair_corr %>% 
   as_tbl_graph(directed = FALSE) %>% 
   activate(edges) %>% 
-  filter(abs(correlation) > .3) %>% 
+  filter(abs(correlation) > .2) %>% 
   activate(nodes) %>% 
   filter(!node_is_isolated())
 
@@ -119,14 +133,21 @@ plot_corr <- graph_object_corr %>%
          name = case_when(is.na(name) ~ "Other species",
                           TRUE ~ name)) %>%
   ggraph() +
-    geom_edge_link(aes(width = correlation, color = name, alpha = species_flag)) +
-    geom_node_point(aes(shape = !is.na(name_label))) +
-    geom_node_label(aes(label = name_label), repel =  TRUE) +
-    #facet_nodes(~name_label) +
-    scale_edge_alpha_discrete(range = c(0.1, 1)) +
-    scale_edge_color_manual(values = c("blue", "red", "black")) +
-    scale_edge_width(range = c(.3, 3)) +
+    geom_edge_link(aes(alpha = species_flag, width = species_flag)) +
+    geom_node_point(aes(shape = !is.na(name_label), size = !is.na(name_label), color = name_label)) +
+    geom_node_label(aes(label = name_label, color = name_label), repel =  TRUE) +
+    scale_edge_width_manual(values = c(.3, 1)) +
+    scale_edge_alpha_discrete(range = c(0.1, .5)) +
     scale_shape_manual(values = c(1, 19)) +
+    scale_size_manual(values = c(2, 3)) +
+    scale_color_discrete("Species", breaks = c("Blue Jay", "Northern Cardinal", "Other species")) +
+    guides(edge_alpha = FALSE,
+           edge_width = FALSE,
+           size = FALSE,
+           shape = FALSE) +
     theme_void()
 
 plot_corr
+
+plot_corr %>% 
+  ggsave(filename = "output/network_graph_corr_species_flag.png", width = 10, height = 10)
