@@ -17,23 +17,32 @@ theme_set(theme_ipsum())
 
 df <- vroom("data/ebd_US-PA-003_201001_202003_relFeb-2020.zip", delim = "\t") %>% 
   clean_names() %>% 
+  mutate_at(vars(observer_id, locality, observation_date, time_observations_started, protocol_type), str_replace_na, "NA") %>% 
   mutate(observation_count = as.numeric(str_replace(observation_count, "X", as.character(NA))),
          observation_event_id = str_c(observer_id, locality, observation_date, time_observations_started)) %>% 
   filter(all_species_reported == 1)
 
+df_top_protocols <- df %>% 
+  count(protocol_type, sort = TRUE) %>% 
+  slice(1:2)
+
 df_counts <- df %>% 
+  semi_join(df_top_protocols) %>% 
   count(common_name, name = "species_count", sort = TRUE)
 
 df_counts
 
 df %>% 
-  count(observation_date) %>% 
-  mutate(recent_observation = year(observation_date) >= 2016) %>% 
-  ggplot(aes(observation_date, n, color = recent_observation)) +
-    geom_line()
+  count(protocol_type, observation_date) %>% 
+  mutate(recent_observation = year(observation_date) >= 2016,
+         observation_date = ymd(observation_date)) %>% 
+  ggplot(aes(observation_date, n, color = recent_observation, group = protocol_type)) +
+    geom_line() +
+    facet_wrap(~protocol_type)
 
 df_pair_count <- df %>% 
-  filter(year(observation_date) >= 2016) %>% 
+  semi_join(df_top_protocols) %>% 
+  #filter(year(observation_date) >= 2016) %>% 
   #filter(common_name != "gull sp.") %>% 
   pairwise_count(common_name, observation_event_id, wt = observation_count, diag = FALSE, upper = FALSE) %>% 
   arrange(desc(n)) %>% 
@@ -51,7 +60,7 @@ graph_object_count <- df_pair_count %>%
   activate(nodes) %>% 
   filter(!node_is_isolated())
 
-species_list <- c("Northern Cardinal", "Blue Jay")
+species_list <- c("Northern Cardinal")
 
 df_species_count_nodes <- graph_object_count %>% 
   activate(nodes) %>% 
@@ -84,7 +93,7 @@ plot_count <- graph_object_count %>%
            shape = FALSE) +
     theme_void()
 
-plot_count  
+#plot_count  
 
 plot_count %>% 
   ggsave(filename = "output/network_graph_count_species_flag.png", width = 10, height = 10)
@@ -95,9 +104,7 @@ df_counts %>%
   arrange(species_count)
 
 df_pair_corr <- df %>% 
-  semi_join(df_counts %>%
-              top_frac(.5) %>% 
-              arrange(species_count)) %>% 
+  semi_join(df_top_protocols) %>% 
   pairwise_cor(common_name, observation_event_id, diag = FALSE, upper = FALSE)
 
 df_pair_corr %>% 
@@ -105,16 +112,18 @@ df_pair_corr %>%
 
 df_pair_corr %>% 
   ggplot(aes(correlation)) +
-  geom_density()
+    geom_density()
 
 graph_object_corr <- df_pair_corr %>% 
   as_tbl_graph(directed = FALSE) %>% 
   activate(edges) %>% 
   filter(abs(correlation) > .2) %>% 
   activate(nodes) %>% 
+  mutate(centrality = centrality_authority()) %>% 
+  filter(centrality > .01) %>% 
   filter(!node_is_isolated())
 
-species_list <- c("Northern Cardinal", "Blue Jay")
+species_list <- c("Northern Cardinal")
 
 df_species_corr_nodes <- graph_object_corr %>% 
   activate(nodes) %>% 
@@ -147,7 +156,7 @@ plot_corr <- graph_object_corr %>%
            shape = FALSE) +
     theme_void()
 
-plot_corr
+#plot_corr
 
 plot_corr %>% 
   ggsave(filename = "output/network_graph_corr_species_flag.png", width = 10, height = 10)
