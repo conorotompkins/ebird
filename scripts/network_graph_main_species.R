@@ -14,16 +14,22 @@ theme_set(theme_ipsum())
 
 df <- vroom("data/ebd_US-PA-003_201001_202003_relFeb-2020.zip") %>% 
   clean_names() %>% 
+  mutate_at(vars(observer_id, locality, observation_date, time_observations_started, protocol_type), str_replace_na, "NA") %>% 
   mutate(observation_count = as.numeric(str_replace(observation_count, "X", as.character(NA))),
-         observation_event_id = str_c(observer_id, locality, observation_date, time_observations_started))
+         observation_event_id = str_c(observer_id, locality, observation_date, time_observations_started)) %>% 
+  filter(all_species_reported == 1)
 
 df_counts <- df %>% 
   count(common_name, name = "species_count", sort = TRUE)
 
 df_counts
 
+df_top_protocols <- df %>% 
+  count(protocol_type, sort = TRUE) %>% 
+  slice(1:4)
+
 df_pairs <- df %>% 
-  #filter(common_name != "gull sp.") %>% 
+  semi_join(df_top_protocols) %>% 
   pairwise_count(common_name, observation_event_id, wt = observation_count, diag = FALSE, upper = FALSE) %>% 
   arrange(desc(n)) %>% 
   drop_na(n)
@@ -31,6 +37,7 @@ df_pairs <- df %>%
 df_pairs
 
 graph_object <- df_pairs %>% 
+  #filter(common_name != "gull sp.") %>% 
   as_tbl_graph(directed = FALSE) %>% 
   activate(edges) %>% 
   filter(n > 50) %>% 
@@ -48,10 +55,10 @@ plot <- graph_object %>%
     scale_edge_width("Observations together", range = c(.3, 2), labels = scales::comma) +
     theme_void()
 
-plot  
+#plot  
 
 plot %>% 
-  ggsave(filename = "output/network_graph_top_species.png")
+  ggsave(filename = "output/network_graph_top_species.png", width = 10, height = 10)
 
 graph_object %>% 
   activate(nodes) %>% 
@@ -75,6 +82,8 @@ plot_groups <- graph_object %>%
     scale_edge_width("Observations together", range = c(.3, 2), labels = scales::comma) +
     guides(edge_color = FALSE, edge_fill = FALSE) +
     theme_void()
+
+plot_groups
 
 plot_groups %>% 
   ggsave(filename = "output/network_graph_attempt_color_fill.png")
