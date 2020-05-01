@@ -47,7 +47,7 @@ df_cumulative <- df %>%
     select     = observation_count,
     mutate_fun = rollapply, 
     # rollapply args
-    width      = 14,
+    width      = 21,
     align      = "right",
     FUN        = mean,
     # mean args
@@ -66,8 +66,8 @@ df_cumulative %>%
 plot <- df_cumulative %>% 
   ggplot(aes(observation_date, observation_count_cumulative, group = common_name)) +
   geom_line(alpha = .5) +
-  geom_point(aes(size = mean_14)) +
   geom_segment(aes(xend = last(df_cumulative$observation_date) + 240, yend = observation_count_cumulative), linetype = 2, colour = 'grey') +
+  geom_point(aes(size = mean_14)) +
   # geom_label_repel(aes(x = last(df_cumulative$observation_date) + 120, label = common_name),
   #                  #hjust = -.1,
   #                  #vjust = 0,
@@ -89,4 +89,4 @@ plot <- df_cumulative %>%
 
 
 #animate(plot, width = 1200, height = 900, end_pause = 5, duration = 15, fps = 3)
-anim_save(filename = "cumulative_observations.gif", path = "output", animation = plot, width = 1200, height = 900, end_pause = 10, duration = 15, fps = 10)
+anim_save(filename = "cumulative_observations.gif", path = "output", animation = plot, width = 1600, height = 900, end_pause = 10, duration = 15, fps = 20)
