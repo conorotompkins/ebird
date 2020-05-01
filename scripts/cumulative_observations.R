@@ -82,7 +82,7 @@ plot <- df_cumulative %>%
        y = "Cumulative observations",
        title = "eBird observations in Allegheny County",
        subtitle = "Top 10 birds 2016 through January 2020",
-       caption = "@conor_tompkins") +
+       caption = "@conor_tompkins, data from eBird") +
   coord_cartesian(clip = 'off') +
   #theme(#plot.margin = margin(5.5, 300, 5.5, 5.5),
   #      axis.text = element_text(size = 30)) +
