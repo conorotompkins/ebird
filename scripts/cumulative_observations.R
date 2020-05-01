@@ -66,25 +66,27 @@ df_cumulative %>%
 plot <- df_cumulative %>% 
   ggplot(aes(observation_date, observation_count_cumulative, group = common_name)) +
   geom_line(alpha = .5) +
-  geom_point(aes(size = mean_28)) +
-  geom_segment(aes(xend = last(df_cumulative$observation_date) + 120, yend = observation_count_cumulative), linetype = 2, colour = 'grey') +
-  geom_label_repel(aes(x = last(df_cumulative$observation_date) + 120, label = common_name),
-                   #hjust = -.1,
-                   #vjust = 0,
-                   nudge_x = 50,
-                   #direction = "x"
-  ) +
+  geom_point(aes(size = mean_14)) +
+  geom_segment(aes(xend = last(df_cumulative$observation_date) + 240, yend = observation_count_cumulative), linetype = 2, colour = 'grey') +
+  # geom_label_repel(aes(x = last(df_cumulative$observation_date) + 120, label = common_name),
+  #                  #hjust = -.1,
+  #                  #vjust = 0,
+  #                  nudge_x = 50,
+  #                  #direction = "x"
+  # ) +
+  geom_label(aes(x = last(df_cumulative$observation_date) + 240, label = common_name)) +
   scale_y_comma() +
-  scale_size_continuous("14 day rolling average of observation count", range = c(2, 8)) +
-  scale_x_date(limits = c(first(df_cumulative$observation_date), last(df_cumulative$observation_date) + 210)) +
+  scale_size_continuous("14 day rolling average of observation count", range = c(2, 10)) +
+  scale_x_date(limits = c(first(df_cumulative$observation_date), last(df_cumulative$observation_date) + 250)) +
   labs(x = NULL,
        y = "Cumulative observations",
        title = "eBird observations in Allegheny County",
        subtitle = "Top 10 birds 2016 through March 2020",
        caption = "@conor_tompkins") +
   coord_cartesian(clip = 'off') +
-  theme(plot.margin = margin(5.5, 200, 5.5, 5.5)) +
+  theme(plot.margin = margin(5.5, 300, 5.5, 5.5)) +
   transition_reveal(observation_date)
 
 
-animate(plot, width = 900, height = 900, end_pause = 30, duration = 15, fps = 3)
+#animate(plot, width = 1200, height = 900, end_pause = 5, duration = 15, fps = 3)
+anim_save(filename = "cumulative_observations.gif", path = "output", animation = plot, width = 1200, height = 900, end_pause = 10, duration = 15, fps = 10)
