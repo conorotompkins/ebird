@@ -9,7 +9,7 @@ library(tidyquant)
 
 set.seed(1234)
 
-theme_set(theme_ipsum())
+theme_set(theme_bw(base_size = 16))
 
 
 df <- vroom("data/ebd_US-PA-003_201001_202003_relFeb-2020.zip", delim = "\t") %>% 
@@ -53,7 +53,7 @@ df_cumulative <- df %>%
     # mean args
     na.rm      = TRUE,
     # tq_mutate args
-    col_rename = "mean_14"
+    col_rename = "mean_21"
   )
 
 df_cumulative %>% 
@@ -67,24 +67,26 @@ plot <- df_cumulative %>%
   ggplot(aes(observation_date, observation_count_cumulative, group = common_name)) +
   geom_line(alpha = .5) +
   geom_segment(aes(xend = last(df_cumulative$observation_date) + 240, yend = observation_count_cumulative), linetype = 2, colour = 'grey') +
-  geom_point(aes(size = mean_14)) +
+  geom_point(aes(size = mean_21)) +
   # geom_label_repel(aes(x = last(df_cumulative$observation_date) + 120, label = common_name),
   #                  #hjust = -.1,
   #                  #vjust = 0,
   #                  nudge_x = 50,
   #                  #direction = "x"
   # ) +
-  geom_label(aes(x = last(df_cumulative$observation_date) + 240, label = common_name)) +
+  geom_label(aes(x = last(df_cumulative$observation_date) + 210, label = common_name), size = 6) +
   scale_y_comma() +
-  scale_size_continuous("14 day rolling average of observation count", range = c(2, 10)) +
+  scale_size_continuous("21 day rolling average of observation count", range = c(2, 10), labels = scales::comma) +
   scale_x_date(limits = c(first(df_cumulative$observation_date), last(df_cumulative$observation_date) + 250)) +
   labs(x = NULL,
        y = "Cumulative observations",
        title = "eBird observations in Allegheny County",
-       subtitle = "Top 10 birds 2016 through March 2020",
+       subtitle = "Top 10 birds 2016 through January 2020",
        caption = "@conor_tompkins") +
   coord_cartesian(clip = 'off') +
-  theme(plot.margin = margin(5.5, 300, 5.5, 5.5)) +
+  #theme(#plot.margin = margin(5.5, 300, 5.5, 5.5),
+  #      axis.text = element_text(size = 30)) +
+  #theme_bw() +
   transition_reveal(observation_date)
 
 
