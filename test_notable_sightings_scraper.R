@@ -127,3 +127,6 @@ bird_table <- test %>%
   gt() %>% 
   text_transform(locations = cells_body(columns = vars(`Bird image`)), web_image) %>% 
   fmt_markdown(columns = vars(`Common name`))
+
+bird_table %>% 
+  gtsave(filename = "notable_sightings_table.html")
