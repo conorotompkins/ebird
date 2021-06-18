@@ -12,7 +12,7 @@ options(scipen = 999, digits = 4, tigris_use_cache = TRUE)
 
 #download notable bird sightings
 pgh_region_notables <- ebirdnotable(region = "US-PA",
-                                    subnational2Code = 42,
+                                    #subnational2Code = 42,
                                     #lat = 40, lng = -80,
                                     back = 30) %>% 
   #st_as_sf(coords = c("lng", "lat"), crs = "epsg:3857")
@@ -60,6 +60,7 @@ wpa_region %>%
 pgh_map <- get_map(location = c(lat = 40.445315, lon = -79.977104), 
                    zoom = 9,
                    maptype = "hybrid")
+
 full_map <- ggmap(pgh_map) +
   geom_sf(data = wpa_region, fill = NA, 
           inherit.aes = FALSE,
