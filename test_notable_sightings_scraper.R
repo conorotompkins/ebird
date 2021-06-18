@@ -130,4 +130,4 @@ bird_table <- test %>%
   fmt_markdown(columns = vars(`Common name`))
 
 bird_table %>% 
-  gtsave(filename = "notable_sightings_table.html")
+  gtsave(filename = "output/notable_sightings_table.html")
