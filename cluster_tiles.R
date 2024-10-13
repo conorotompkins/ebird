@@ -47,6 +47,11 @@ abundance_list <- pmap(list(species_vec_all, "abundance", "Pennsylvania"), pull_
 
 abundance_df <- list_rbind(abundance_list)
 
+abundance_df |> 
+  write_csv("output/combined_ebird_metrics.csv")
+
+abundance_df <- read_csv("output/combined_ebird_metrics.csv")
+
 duplicate_geo <- abundance_df |> 
   group_by(species_name, x, y) |> 
   filter(n() > 1) |>
@@ -56,17 +61,6 @@ duplicate_geo <- abundance_df |>
 duplicate_geo
 
 abundance_df <- anti_join(abundance_df, duplicate_geo)
-
-random_birds <- abundance_df |> 
-  distinct(species_name) |> 
-  slice_sample(n = 10)
-
-abundance_df |>
-  semi_join(random_birds) |> 
-  ggplot(aes(x, y, fill = rel_abundance)) +
-  geom_tile() +
-  facet_wrap(vars(species_name)) +
-  scale_fill_viridis_c()
 
 abundance_df |> 
   summarize(zero_pct = mean(rel_abundance == 0),
@@ -84,8 +78,26 @@ occuring_species
 abundance_df <- abundance_df |> 
   semi_join(occuring_species)
 
+random_birds <- abundance_df |> 
+  distinct(species_name) |> 
+  slice_sample(n = 10)
+
+abundance_df |>
+  semi_join(random_birds) |> 
+  ggplot(aes(x, y, fill = rel_abundance)) +
+  geom_tile() +
+  facet_wrap(vars(species_name)) +
+  scale_fill_viridis_c()
+
 abundance_df <- abundance_df |> 
   mutate(rel_abundance_scaled = scale(rel_abundance) |> as.numeric(), .by = species_name)
+
+abundance_df |>
+  semi_join(random_birds) |> 
+  ggplot(aes(x, y, fill = rel_abundance_scaled)) +
+  geom_tile() +
+  facet_wrap(vars(species_name)) +
+  scale_fill_viridis_c()
 
 abundance_df |> 
   semi_join(random_birds) |> 
@@ -173,14 +185,19 @@ p1 <- assignments |>
   facet_wrap(~ k)
 p1
 
-kclust <- kmeans(abundance_df_noloc, centers = 6)
+kclust <- kmeans(abundance_df_noloc, centers = 8)
 
-augment(kclust, abundance_df_wide) |> 
+tidy(kclust) |> select(size, withinss, cluster) |> arrange(desc(size))
+
+cluster_geo <- augment(kclust, abundance_df_wide) |> 
+  mutate(.cluster = fct_infreq(.cluster))
+
+cluster_geo |> 
   ggplot(aes(x, y, fill = .cluster)) +
   geom_tile() +
   scale_fill_viridis_d()
 
-augment(kclust, abundance_df_wide) |> 
+cluster_geo |> 
   pivot_longer(cols = -c(x, y, .cluster)) |> 
   summarize(value = mean(value), .by = c(.cluster, name)) |> 
   arrange(.cluster, desc(value)) |> 
@@ -195,7 +212,7 @@ augment(kclust, abundance_df_wide) |>
 blank_tiles <- abundance_df_wide |>
   distinct(x, y)
 
-augment(kclust, abundance_df_wide) |> 
+cluster_geo |> 
   select(x, y, .cluster) |> 
   ggplot(aes(x, y, fill = .cluster)) +
   geom_tile(data = blank_tiles, aes(x, y), inherit.aes = FALSE, fill = "light grey") +
@@ -231,4 +248,3 @@ gmm_clust |>
   ggplot(aes(x, y, fill = .class, alpha = .uncertainty)) +
   geom_tile() +
   scale_alpha_continuous(range = c(1, .1))
-  
