@@ -6,6 +6,7 @@ library(terra)
 library(ebirdst)
 library(stars)
 library(tidyterra)
+library(mclust)
 library(broom)
 
 set.seed(1234)
@@ -86,6 +87,12 @@ abundance_df <- abundance_df |>
 abundance_df <- abundance_df |> 
   mutate(rel_abundance_scaled = scale(rel_abundance) |> as.numeric(), .by = species_name)
 
+abundance_df |> 
+  semi_join(random_birds) |> 
+  ggplot(aes(x = rel_abundance_scaled)) +
+  geom_density() +
+  facet_wrap(vars(species_name), scales = "free")
+
 abundance_df_wide <- abundance_df |> 
   select(-rel_abundance) |> 
   pivot_wider(names_from = species_name, values_from = rel_abundance_scaled)
@@ -137,10 +144,10 @@ nclust <- 14
 kclusts <- 
   tibble(k = 1:nclust) %>%
   mutate(
-    kclust = map(k, ~kmeans(abundance_df_noloc, .x)),
-    tidied = map(kclust, tidy),
-    glanced = map(kclust, glance),
-    augmented = map(kclust, augment, abundance_df_wide)
+    kclust = purrr::map(k, ~kmeans(abundance_df_noloc, .x)),
+    tidied = purrr::map(kclust, tidy),
+    glanced = purrr::map(kclust, glance),
+    augmented = purrr::map(kclust, augment, abundance_df_wide)
   )
 
 clusters <- kclusts |>
@@ -163,7 +170,7 @@ p1 <- assignments |>
   facet_wrap(~ k)
 p1
 
-kclust <- kmeans(abundance_df_noloc, centers = 8)
+kclust <- kmeans(abundance_df_noloc, centers = 6)
 
 augment(kclust, abundance_df_wide) |> 
   ggplot(aes(x, y, fill = .cluster)) +
@@ -192,3 +199,33 @@ augment(kclust, abundance_df_wide) |>
   geom_tile() +
   scale_fill_viridis_d() +
   facet_wrap(vars(.cluster))
+
+#GMM
+tictoc::tic()
+m <- Mclust(abundance_df_noloc, G = 5)
+tictoc::toc()
+
+m
+
+tidy(m)
+
+glance(m)
+
+gmm_clust <- augment(m, abundance_df_wide)
+
+gmm_clust |> 
+  summarize(.uncertainty = mean(.uncertainty),
+            sd = sd(.uncertainty),
+            .by = .class)
+
+gmm_clust |> 
+  ggplot(aes(.uncertainty)) +
+  geom_histogram() +
+  facet_wrap(vars(.class), scales = "free")
+
+gmm_clust |> 
+  select(x, y, .class, .uncertainty) |> 
+  ggplot(aes(x, y, fill = .class, alpha = .uncertainty)) +
+  geom_tile() +
+  scale_alpha_continuous(range = c(1, .1))
+  
