@@ -139,6 +139,9 @@ my_fn <- function(data, mapping, ...){
 # abundance_df_noloc |> 
 #   GGally::ggpairs(lower = list(continuous = my_fn))
 
+## clustering
+
+#kmeans
 nclust <- 14
 
 kclusts <- 
