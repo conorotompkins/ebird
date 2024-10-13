@@ -8,6 +8,10 @@ library(stars)
 library(tidyterra)
 library(mclust)
 library(broom)
+library(workflows)
+library(parsnip)
+library(tidyclust)
+library(factoextra)
 
 set.seed(1234)
 
@@ -43,12 +47,12 @@ ebirdst_download_status(species = species_vec_all[3],
                         download_abundance = TRUE,
                         dry_run = TRUE)
 
-abundance_list <- pmap(list(species_vec_all, "abundance", "Pennsylvania"), pull_ebird_metrics)
+#abundance_list <- pmap(list(species_vec_all, "abundance", "Pennsylvania"), pull_ebird_metrics)
 
-abundance_df <- list_rbind(abundance_list)
+#abundance_df <- list_rbind(abundance_list)
 
-abundance_df |> 
-  write_csv("output/combined_ebird_metrics.csv")
+# abundance_df |> 
+#   write_csv("output/combined_ebird_metrics.csv")
 
 abundance_df <- read_csv("output/combined_ebird_metrics.csv")
 
@@ -185,7 +189,7 @@ p1 <- assignments |>
   facet_wrap(~ k)
 p1
 
-kclust <- kmeans(abundance_df_noloc, centers = 8)
+kclust <- kmeans(abundance_df_noloc, centers = 9)
 
 tidy(kclust) |> select(size, withinss, cluster) |> arrange(desc(size))
 
@@ -216,6 +220,82 @@ cluster_geo |>
   select(x, y, .cluster) |> 
   ggplot(aes(x, y, fill = .cluster)) +
   geom_tile(data = blank_tiles, aes(x, y), inherit.aes = FALSE, fill = "light grey") +
+  geom_tile() +
+  scale_fill_viridis_d() +
+  facet_wrap(vars(.cluster))
+
+#hierarchical
+
+wss_plot <- fviz_nbclust(abundance_df_noloc, FUN = hcut, method = "wss")
+
+wss_plot
+
+wss_plot$data |> 
+  mutate(diff = (y - lag(y)) / y) |> 
+  ggplot(aes(clusters, diff, group = 1)) +
+  geom_line() +
+  geom_point() +
+  scale_y_reverse()
+
+# hclust_kclusts <- tibble(k = 1:2) %>%
+#   mutate(
+#     abundance = list(abundance_df_noloc),
+#     kclust = purrr::map(k, ~hier_clust(num_clusters = .x, linkage_method = "ward")),
+#     fit = purrr::map2(kclust, abundance, ~fit(.x, ~ ., .y)),
+#     fit_summary = purrr::map(fit, extract_fit_summary),
+#     score = purrr::map_dbl(fit_summary, "sse_total"),
+#     dendrogram = purrr::map2(kclust, abundance, ~fit(.x, ~ ., .y)) |> plot(),
+#     )
+# 
+# hclust_kclusts
+# 
+# hclust_kclusts |> 
+#   filter(k == 3) |> 
+#   pull(fit) |> 
+#   pluck(1) |> 
+#   plot()
+
+hc_spec <- hier_clust(
+  num_clusters = 8,
+  linkage_method = "ward"
+)
+
+hc_spec
+
+hc_fit <- hc_spec %>%
+  fit(~ .,
+      data = abundance_df_noloc
+  )
+
+hc_fit$fit |> str()
+
+hc_fit$fit %>% plot()
+
+hc_summary <- hc_fit %>% extract_fit_summary()
+
+hc_summary %>% str()
+
+hc_summary$n_members
+
+hc_summary$sse_total
+
+hc_preds <- extract_cluster_assignment(hc_fit)
+
+#hc_preds <- hc_fit %>% predict(abundance_df_wide)
+
+hclust_geo <- abundance_df_wide |> 
+  select(x, y) |> 
+  bind_cols(hc_preds) |> 
+  mutate(.cluster = fct_infreq(.cluster))
+
+hclust_geo |> 
+  ggplot(aes(x, y, fill = .cluster)) +
+  geom_tile() +
+  scale_fill_viridis_d()
+
+hclust_geo |> 
+  ggplot(aes(x, y, fill = .cluster)) +
+  geom_tile(data = blank_tiles, aes(x, y), fill = "light grey", inherit.aes = FALSE) +
   geom_tile() +
   scale_fill_viridis_d() +
   facet_wrap(vars(.cluster))
