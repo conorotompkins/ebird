@@ -20,6 +20,7 @@ source("scripts/pull_ebirdst_metrics.R")
 species_vec_all <- ebirdst::ebirdst_runs |> 
   filter(is_resident == FALSE) |> 
   filter(breeding_quality == 3, nonbreeding_quality == 3) |> 
+  filter(!str_detect(species_code, "example")) |> 
   pull(common_name)
 
 species_vec_warbs <- ebirdst::ebirdst_runs |> 
@@ -47,12 +48,12 @@ ebirdst_download_status(species = species_vec_all[3],
                         download_abundance = TRUE,
                         dry_run = TRUE)
 
-#abundance_list <- pmap(list(species_vec_all, "abundance", "Pennsylvania"), pull_ebird_metrics)
+abundance_list <- pmap(list(species_vec_all, "abundance", "Pennsylvania"), pull_ebird_metrics)
 
-#abundance_df <- list_rbind(abundance_list)
+abundance_df <- list_rbind(abundance_list)
 
-# abundance_df |> 
-#   write_csv("output/combined_ebird_metrics.csv")
+abundance_df |>
+  write_csv("output/combined_ebird_metrics.csv")
 
 abundance_df <- read_csv("output/combined_ebird_metrics.csv")
 
@@ -226,7 +227,7 @@ cluster_geo |>
 
 #hierarchical
 
-wss_plot <- fviz_nbclust(abundance_df_noloc, FUN = hcut, method = "wss")
+wss_plot <- fviz_nbclust(abundance_df_noloc, FUN = hcut, method = "wss", k.max = 20)
 
 wss_plot
 
@@ -325,6 +326,17 @@ gmm_clust |>
 
 gmm_clust |> 
   select(x, y, .class, .uncertainty) |> 
+  ggplot(aes(x, y, fill = .class)) +
+  geom_tile()
+
+gmm_clust |> 
+  select(x, y, .class, .uncertainty) |> 
   ggplot(aes(x, y, fill = .class, alpha = .uncertainty)) +
   geom_tile() +
   scale_alpha_continuous(range = c(1, .1))
+
+gmm_clust |> 
+  select(x, y, .class, .uncertainty) |> 
+  ggplot(aes(x, y, fill = .uncertainty)) +
+  geom_tile() +
+  scale_fill_viridis_c()
