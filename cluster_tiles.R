@@ -202,18 +202,35 @@ p1 <- assignments |>
   facet_wrap(~ k)
 p1
 
-kclust <- kmeans(abundance_df_noloc, centers = 13)
+kclust <- kmeans(abundance_df_noloc, centers = 9)
 
 tidy(kclust) |> select(size, withinss, cluster) |> arrange(desc(size))
 
 cluster_geo <- augment(kclust, abundance_df_wide) |> 
   mutate(.cluster = fct_infreq(.cluster))
 
-cluster_geo |> 
+#custom_palette <- c(RColorBrewer::brewer.pal(12, "Paired"), "grey")
+
+custom_palette <- RColorBrewer::brewer.pal(9, "Paired")
+
+kmeans_map <- cluster_geo |> 
   ggplot(aes(x, y, fill = .cluster)) +
   geom_tile() +
-  scale_fill_viridis_d() +
-  theme_void()
+  scale_fill_manual(values = custom_palette) +
+  labs(title = "Types of habitat inferred from bird species abundance",
+       subtitle = "Clusters determined by kmeans algorithm",
+       caption = "Data from eBird Status and Trends",
+       fill = "Cluster") +
+  theme_void() +
+  theme(plot.background = element_rect(fill = "white"),
+        plot.title = element_text(size = 30),
+        plot.subtitle = element_text(size = 16),
+        plot.caption = element_text(size = 14),
+        legend.text = element_text(size = 12))
+
+kmeans_map
+
+ggsave("output/kmeans_map.png", kmeans_map, width = 20, height = 12, dpi = 300)
 
 cluster_geo |> 
   pivot_longer(cols = -c(x, y, .cluster)) |> 
@@ -230,14 +247,26 @@ cluster_geo |>
 blank_tiles <- abundance_df_wide |>
   distinct(x, y)
 
-cluster_geo |> 
+kmeans_map_facet <- cluster_geo |> 
   select(x, y, .cluster) |> 
   ggplot(aes(x, y, fill = .cluster)) +
-  geom_tile(data = blank_tiles, aes(x, y), inherit.aes = FALSE, fill = "light grey") +
+  geom_tile(data = blank_tiles, aes(x, y), inherit.aes = FALSE, fill = "light grey", alpha = .5) +
   geom_tile() +
-  scale_fill_viridis_d() +
+  scale_fill_manual(values = custom_palette) +
+  labs(title = "Types of habitat inferred from bird species abundance",
+       subtitle = "Clusters determined by kmeans algorithm",
+       caption = "Data from eBird Status and Trends") +
+  guides(fill = "none") +
   facet_wrap(vars(.cluster)) +
-  theme_void()
+  theme_void() +
+  theme(plot.background = element_rect(fill = "white"),
+        plot.title = element_text(size = 30),
+        plot.subtitle = element_text(size = 16),
+        plot.caption = element_text(size = 14))
+
+kmeans_map_facet
+
+ggsave("output/kmeans_map_facet.png", width = 20, height = 12, dpi = 300)
 
 #hierarchical
 wss_plot <- fviz_nbclust(abundance_df_noloc, FUN = hcut, method = "wss", k.max = 20)
