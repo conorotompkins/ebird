@@ -92,7 +92,7 @@ abundance_df_scaled |>
   filter(is.nan(rel_abundance_rescaled_log10)) |> 
   nrow() == 0
 
-test_sp <- c("Dark-eyed Junco", "Field Sparrow", "Common Grackle", "Snow Goose")
+test_sp <- c("Dark-eyed Junco", "Field Sparrow", "Common Grackle", "Snow Goose", "American Crow")
 
 abundance_df_scaled |>
   filter(species_name %in% test_sp) |> 
@@ -151,8 +151,14 @@ my_fn <- function(data, mapping, ...){
   p
 }
 
-# abundance_df_noloc |> 
-#   GGally::ggpairs(lower = list(continuous = my_fn))
+sampled_sp <- abundance_df_scaled |> 
+  select(species_name, rel_abundance_rescaled_log10) |> 
+  summarize(mean = mean(rel_abundance_rescaled_log10), .by = species_name) |> 
+  dplyr::slice_sample(n = 10, weight_by = mean)
+
+abundance_df_noloc |>
+  select(all_of(pull(sampled_sp, species_name))) |> 
+  GGally::ggpairs(lower = list(continuous = my_fn))
 
 ## clustering
 
@@ -196,7 +202,7 @@ p1 <- assignments |>
   facet_wrap(~ k)
 p1
 
-kclust <- kmeans(abundance_df_noloc, centers = 6)
+kclust <- kmeans(abundance_df_noloc, centers = 13)
 
 tidy(kclust) |> select(size, withinss, cluster) |> arrange(desc(size))
 
@@ -206,7 +212,8 @@ cluster_geo <- augment(kclust, abundance_df_wide) |>
 cluster_geo |> 
   ggplot(aes(x, y, fill = .cluster)) +
   geom_tile() +
-  scale_fill_viridis_d()
+  scale_fill_viridis_d() +
+  theme_void()
 
 cluster_geo |> 
   pivot_longer(cols = -c(x, y, .cluster)) |> 
@@ -229,10 +236,11 @@ cluster_geo |>
   geom_tile(data = blank_tiles, aes(x, y), inherit.aes = FALSE, fill = "light grey") +
   geom_tile() +
   scale_fill_viridis_d() +
-  facet_wrap(vars(.cluster))
+  facet_wrap(vars(.cluster)) +
+  theme_void()
 
 #hierarchical
-wss_plot <- fviz_nbclust(abundance_df_noloc, FUN = hcut, method = "wss", k.max = 10)
+wss_plot <- fviz_nbclust(abundance_df_noloc, FUN = hcut, method = "wss", k.max = 20)
 
 wss_plot
 
@@ -262,7 +270,7 @@ wss_plot$data |>
 #   plot()
 
 hc_spec <- hier_clust(
-  num_clusters = 9,
+  num_clusters = 11,
   linkage_method = "ward"
 )
 
@@ -297,14 +305,16 @@ hclust_geo <- abundance_df_wide |>
 hclust_geo |> 
   ggplot(aes(x, y, fill = .cluster)) +
   geom_tile() +
-  scale_fill_viridis_d()
+  scale_fill_viridis_d() +
+  theme_void()
 
 hclust_geo |> 
   ggplot(aes(x, y, fill = .cluster)) +
   geom_tile(data = blank_tiles, aes(x, y), fill = "light grey", inherit.aes = FALSE) +
   geom_tile() +
   scale_fill_viridis_d() +
-  facet_wrap(vars(.cluster))
+  facet_wrap(vars(.cluster)) +
+  theme_void()
 
 #GMM
 tictoc::tic()
@@ -332,16 +342,27 @@ gmm_clust |>
 gmm_clust |> 
   select(x, y, .class, .uncertainty) |> 
   ggplot(aes(x, y, fill = .class)) +
-  geom_tile()
+  geom_tile() +
+  theme_void()
 
 gmm_clust |> 
   select(x, y, .class, .uncertainty) |> 
   ggplot(aes(x, y, fill = .class, alpha = .uncertainty)) +
   geom_tile() +
-  scale_alpha_continuous(range = c(1, .1))
+  scale_alpha_continuous(range = c(1, .1)) +
+  theme_void()
 
 gmm_clust |> 
   select(x, y, .class, .uncertainty) |> 
   ggplot(aes(x, y, fill = .uncertainty)) +
   geom_tile() +
-  scale_fill_viridis_c()
+  scale_fill_viridis_c() +
+  theme_void()
+
+gmm_clust |> 
+  ggplot(aes(x, y, fill = .class)) +
+  geom_tile(data = blank_tiles, aes(x, y), fill = "light grey", inherit.aes = FALSE) +
+  geom_tile() +
+  scale_fill_viridis_d() +
+  facet_wrap(vars(.class)) +
+  theme_void()
