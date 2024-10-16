@@ -211,12 +211,12 @@ cluster_geo <- augment(kclust, abundance_df_wide) |>
 
 #custom_palette <- c(RColorBrewer::brewer.pal(12, "Paired"), "grey")
 
-custom_palette <- RColorBrewer::brewer.pal(9, "Paired")
+custom_palette_kmeans <- RColorBrewer::brewer.pal(9, "Paired")
 
 kmeans_map <- cluster_geo |> 
   ggplot(aes(x, y, fill = .cluster)) +
   geom_tile() +
-  scale_fill_manual(values = custom_palette) +
+  scale_fill_manual(values = custom_palette_kmeans) +
   labs(title = "Types of habitat inferred from bird species abundance",
        subtitle = "Clusters determined by kmeans algorithm",
        caption = "Data from eBird Status and Trends",
@@ -331,19 +331,47 @@ hclust_geo <- abundance_df_wide |>
   bind_cols(hc_preds) |> 
   mutate(.cluster = fct_infreq(.cluster))
 
-hclust_geo |> 
-  ggplot(aes(x, y, fill = .cluster)) +
-  geom_tile() +
-  scale_fill_viridis_d() +
-  theme_void()
+custom_palette_hclust <- c(RColorBrewer::brewer.pal(9, "Paired"), "dark grey", "black")
 
-hclust_geo |> 
+hclust_map <- hclust_geo |> 
   ggplot(aes(x, y, fill = .cluster)) +
-  geom_tile(data = blank_tiles, aes(x, y), fill = "light grey", inherit.aes = FALSE) +
   geom_tile() +
-  scale_fill_viridis_d() +
+  scale_fill_manual(values = custom_palette_hclust) +
+  labs(title = "Types of habitat inferred from bird species abundance",
+       subtitle = "Clusters determined by hclust algorithm",
+       caption = "Data from eBird Status and Trends",
+       fill = "Cluster") +
+  theme_void() +
+  theme(plot.background = element_rect(fill = "white"),
+        plot.title = element_text(size = 30),
+        plot.subtitle = element_text(size = 16),
+        plot.caption = element_text(size = 14),
+        legend.text = element_text(size = 12))
+
+hclust_map
+
+ggsave("output/hclust_map.png", hclust_map, width = 20, height = 12, dpi = 300)
+
+hclust_map_facet <- hclust_geo |> 
+  ggplot(aes(x, y, fill = .cluster)) +
+  geom_tile(data = blank_tiles, aes(x, y), fill = "light grey", alpha = .5, inherit.aes = FALSE) +
+  geom_tile() +
+  scale_fill_manual(values = custom_palette_hclust) +
   facet_wrap(vars(.cluster)) +
-  theme_void()
+  labs(title = "Types of habitat inferred from bird species abundance",
+       subtitle = "Clusters determined by hclust algorithm",
+       caption = "Data from eBird Status and Trends") +
+  guides(fill = "none") +
+  theme_void() +
+  theme(plot.background = element_rect(fill = "white"),
+        plot.title = element_text(size = 30),
+        plot.subtitle = element_text(size = 16),
+        plot.caption = element_text(size = 14),
+        legend.text = element_text(size = 12))
+
+hclust_map_facet
+
+ggsave("output/hclust_map_facet.png", hclust_map_facet, width = 20, height = 12, dpi = 300)
 
 #GMM
 tictoc::tic()
@@ -381,6 +409,8 @@ gmm_clust |>
   scale_alpha_continuous(range = c(1, .1)) +
   theme_void()
 
+
+
 gmm_clust |> 
   select(x, y, .class, .uncertainty) |> 
   ggplot(aes(x, y, fill = .uncertainty)) +
@@ -388,10 +418,44 @@ gmm_clust |>
   scale_fill_viridis_c() +
   theme_void()
 
-gmm_clust |> 
+custom_palette_gmm <- RColorBrewer::brewer.pal(5, "Paired")
+
+gmm_map <- gmm_clust |> 
+  ggplot(aes(x, y, fill = .class)) +
+  geom_tile() +
+  scale_fill_manual(values = custom_palette_gmm) +
+  labs(title = "Types of habitat inferred from bird species abundance",
+       subtitle = "Clusters determined by GMM algorithm",
+       caption = "Data from eBird Status and Trends",
+       fill = "Cluster") +
+  theme_void() +
+  theme(plot.background = element_rect(fill = "white"),
+        plot.title = element_text(size = 30),
+        plot.subtitle = element_text(size = 16),
+        plot.caption = element_text(size = 14),
+        legend.text = element_text(size = 12))
+
+gmm_map
+
+ggsave("output/gmm_map.png", gmm_map, width = 20, height = 12, dpi = 300)
+
+gmm_map_facet <- gmm_clust |> 
   ggplot(aes(x, y, fill = .class)) +
   geom_tile(data = blank_tiles, aes(x, y), fill = "light grey", inherit.aes = FALSE) +
   geom_tile() +
-  scale_fill_viridis_d() +
+  scale_fill_manual(values = custom_palette_gmm) +
   facet_wrap(vars(.class)) +
-  theme_void()
+  labs(title = "Types of habitat inferred from bird species abundance",
+       subtitle = "Clusters determined by GMM algorithm",
+       caption = "Data from eBird Status and Trends") +
+  guides(fill = "none") +
+  theme_void() +
+  theme(plot.background = element_rect(fill = "white"),
+        plot.title = element_text(size = 30),
+        plot.subtitle = element_text(size = 16),
+        plot.caption = element_text(size = 14),
+        legend.text = element_text(size = 12))
+
+gmm_map_facet
+
+ggsave("output/gmm_map_facet.png", gmm_map_facet, width = 20, height = 12, dpi = 300)
