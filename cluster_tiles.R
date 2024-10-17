@@ -42,22 +42,25 @@ ebirdst::ebirdst_runs |>
   filter(breeding_quality == 3, nonbreeding_quality == 3) |> 
   filter(str_detect(common_name, "Sandpiper|Snipe|Woodcock"))
 
-#species_vec <- c(species_vec_warbs, species_vec_grassland)
+#species_vec <- c("Golden Eagle")
 
-ebirdst_download_status(species = species_vec_all[3],
-                        download_abundance = TRUE,
-                        dry_run = TRUE)
+# ebirdst_download_status(species = "Golden Eagle",
+#                         download_all = TRUE,
+#                         dry_run = TRUE)
+# 
+# ebirdst_download_status(species = "Northern Cardinal", download_all = TRUE, dry_run = TRUE)
 
-# abundance_list <- pmap(list(species_vec_all, "abundance", "Pennsylvania"), pull_ebird_metrics)
-# 
-# abundance_df <- list_rbind(abundance_list)
-# 
-# abundance_df |>
+#metrics_list <- pmap(list(species_vec_all, "abundance", "Pennsylvania"), pull_ebird_metrics)
+
+# metrics_df <- list_rbind(abundance_list) |> 
+#   rename(prop_pop = metric)
+
+# metrics_df |>
 #   write_csv("output/combined_ebird_metrics.csv")
 
-abundance_df <- read_csv("output/combined_ebird_metrics.csv")
+metrics_df <- read_csv("output/combined_ebird_metrics.csv")
 
-duplicate_geo <- abundance_df |> 
+duplicate_geo <- metrics_df |> 
   group_by(species_name, x, y) |> 
   filter(n() > 1) |>
   ungroup() |> 
@@ -65,56 +68,63 @@ duplicate_geo <- abundance_df |>
 
 duplicate_geo
 
-abundance_df <- anti_join(abundance_df, duplicate_geo)
+metrics_df <- anti_join(metrics_df, duplicate_geo)
 
-abundance_df |> 
-  summarize(zero_pct = mean(rel_abundance == 0),
+metrics_df |> 
+  summarize(zero_pct = mean(prop_pop == 0),
             .by = species_name) |> 
   filter(zero_pct == 1)
 
-occuring_species <- abundance_df |> 
-  summarize(zero_pct = mean(rel_abundance == 0),
+occuring_species <- metrics_df |> 
+  summarize(zero_pct = mean(prop_pop == 0),
             .by = species_name) |>
   filter(zero_pct < 1) |> 
   arrange(desc(zero_pct))
 
 occuring_species
 
-abundance_df <- abundance_df |> 
+metrics_df <- metrics_df |> 
   semi_join(occuring_species)
 
-abundance_df_scaled <- abundance_df |> 
-  mutate(rel_abundance_scaled = rel_abundance |> scale() |> as.numeric(),
-         rel_abundance_rescaled = rel_abundance |> scales::rescale(to = c(0, 1)),
-         rel_abundance_rescaled_log10 = log10(rel_abundance_rescaled + 1), .by = species_name)
+metrics_df_scaled <- metrics_df |> 
+  mutate(prop_pop_scaled = prop_pop |> scale() |> as.numeric(),
+         prop_pop_rescaled = prop_pop |> scales::rescale(to = c(0, 1)),
+         prop_pop_rescaled_log10 = log10(prop_pop_rescaled + 1), .by = species_name)
 
-abundance_df_scaled |> 
-  filter(is.nan(rel_abundance_rescaled_log10)) |> 
+metrics_df_scaled |> 
+  filter(is.nan(prop_pop_rescaled_log10)) |> 
   nrow() == 0
 
 test_sp <- c("Dark-eyed Junco", "Field Sparrow", "Common Grackle", "Snow Goose", "American Crow")
 
-abundance_df_scaled |>
+metrics_df_scaled |>
   filter(species_name %in% test_sp) |> 
-  ggplot(aes(x, y, fill = rel_abundance_scaled)) +
+  ggplot(aes(x, y, fill = prop_pop)) +
   geom_tile() +
   facet_wrap(vars(species_name)) +
   scale_fill_viridis_c()
 
-abundance_df_scaled |>
+metrics_df_scaled |>
   filter(species_name %in% test_sp) |> 
-  ggplot(aes(x, y, fill = rel_abundance_rescaled_log10)) +
+  ggplot(aes(x, y, fill = prop_pop_scaled)) +
   geom_tile() +
   facet_wrap(vars(species_name)) +
   scale_fill_viridis_c()
 
-abundance_df_wide <- abundance_df_scaled |> 
-  select(species_name, x, y, rel_abundance_rescaled_log10) |> 
-  pivot_wider(names_from = species_name, values_from = rel_abundance_rescaled_log10)
+metrics_df_scaled |>
+  filter(species_name %in% test_sp) |> 
+  ggplot(aes(x, y, fill = prop_pop_rescaled_log10)) +
+  geom_tile() +
+  facet_wrap(vars(species_name)) +
+  scale_fill_viridis_c()
 
-abundance_df_noloc <- select(abundance_df_wide, -c(x, y))
+metrics_df_scaled_wide <- metrics_df_scaled |> 
+  select(species_name, x, y, prop_pop_rescaled_log10) |> 
+  pivot_wider(names_from = species_name, values_from = prop_pop_rescaled_log10)
 
-pca_fit <- abundance_df_noloc %>% 
+metrics_df_noloc <- select(metrics_df_scaled_wide, -c(x, y))
+
+pca_fit <- metrics_df_noloc %>% 
   prcomp(scale = TRUE) # do PCA on scaled data
 
 pca_fit %>%
@@ -151,12 +161,12 @@ my_fn <- function(data, mapping, ...){
   p
 }
 
-sampled_sp <- abundance_df_scaled |> 
-  select(species_name, rel_abundance_rescaled_log10) |> 
-  summarize(mean = mean(rel_abundance_rescaled_log10), .by = species_name) |> 
+sampled_sp <- metrics_df_scaled |> 
+  select(species_name, prop_pop_rescaled_log10) |> 
+  summarize(mean = mean(prop_pop_rescaled_log10), .by = species_name) |> 
   dplyr::slice_sample(n = 10, weight_by = mean)
 
-abundance_df_noloc |>
+metrics_df_noloc |>
   select(all_of(pull(sampled_sp, species_name))) |> 
   GGally::ggpairs(lower = list(continuous = my_fn))
 

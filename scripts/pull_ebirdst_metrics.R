@@ -15,39 +15,39 @@ pull_ebird_metrics <- function(species_name, metric, region){
   ebirdst_download_status(species = species_name,
                           download_abundance = TRUE,
                           dry_run = TRUE,
-                          pattern = "abundance_full-year_mean_3km")
+                          pattern = "proportion-population_median_3km")
   
   ebirdst_download_status(species = species_name,
                           download_abundance = TRUE,
                           #dry_run = TRUE,
-                          pattern = "abundance_full-year_mean_3km")
+                          pattern = "proportion-population_median_3km")
   
   # load relative abundance raster for the full year
-  abd <- load_raster(species_name, product = metric, period = "full-year", resolution = "3km")
+  metrics <- load_raster(species_name, product = metric, period = "full-year", resolution = "3km")
   
-  #plot(abd)
+  #plot(metrics)
   
   #get regional boundaries
   region_boundary <- ne_states(iso_a2 = "US") |>
     filter(name == "Pennsylvania")
   
-  region_boundary_proj <- st_transform(region_boundary, st_crs(abd))
+  region_boundary_proj <- st_transform(region_boundary, st_crs(metrics))
   
   region_boundary_vect <- region_boundary |>
-    st_transform(st_crs(abd)) |>
+    st_transform(st_crs(metrics)) |>
     vect()
   
-  #abd_pa <- crop(abd, pa_boundary)
+  #metrics_pa <- crop(metrics, pa_boundary)
   
   #crop to region, set value of cells outside of boundaries to NA
-  abd_pa <- abd |> 
+  metrics_pa <- metrics |> 
     crop(region_boundary_proj) |> 
     mask(region_boundary_proj)
   
-  #plot(abd_pa)
+  #plot(metrics_pa)
   
   # ggplot() +
-  #   geom_spatraster(data = abd_pa)
+  #   geom_spatraster(data = metrics_pa)
   
   #reproject raster to crs that fits region better
   region_centroid <- region_boundary |> 
@@ -62,7 +62,7 @@ pull_ebird_metrics <- function(species_name, metric, region){
                      " +lon_0=", region_centroid[1])
   
   # transform to the custom projection using nearest neighbor resampling
-  abd_pa_laea <- project(abd_pa, crs_laea, method = "near") |> 
+  metrics_pa_laea <- project(metrics_pa, crs_laea, method = "near") |> 
     # remove areas of the raster containing no data
     trim()
   
@@ -73,13 +73,13 @@ pull_ebird_metrics <- function(species_name, metric, region){
   #   geom_spatraster(data = abd_pa_laea) +
   #   scale_fill_viridis_c()
   
-  abundance_df <- abd_pa_laea |> 
+  metrics_df <- metrics_pa_laea |> 
     as.data.frame(xy = TRUE) |> 
     as_tibble() |> 
     mutate(species_name = species_name) |> 
-    rename(rel_abundance = full_year) |> 
-    select(species_name, x, y, rel_abundance)
+    rename(metric = full_year) |> 
+    select(species_name, x, y, metric)
   
-  abundance_df
+  metrics_df
   
 }
