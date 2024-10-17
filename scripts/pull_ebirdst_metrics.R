@@ -7,47 +7,47 @@ library(ebirdst)
 library(stars)
 library(tidyterra)
 
-pull_ebird_metrics <- function(species_name, metric, region){
+pull_ebird_metrics <- function(common_name, metric, resolution, region){
   
-  ebirdst_download_status(species_name, dry_run = TRUE)
+  ebirdst_download_status(common_name, dry_run = TRUE)
   
   #download data from ebird API
-  ebirdst_download_status(species = species_name,
+  ebirdst_download_status(species = common_name,
                           download_abundance = TRUE,
                           dry_run = TRUE,
                           pattern = "proportion-population_median_3km")
-  
-  ebirdst_download_status(species = species_name,
+
+  ebirdst_download_status(species = common_name,
                           download_abundance = TRUE,
                           #dry_run = TRUE,
                           pattern = "proportion-population_median_3km")
   
   # load relative abundance raster for the full year
-  metrics <- load_raster(species_name, product = metric, period = "full-year", resolution = "3km")
+  product_raster <- load_raster(common_name, product = metric, resolution = resolution)
   
-  #plot(metrics)
+  product_raster
   
   #get regional boundaries
   region_boundary <- ne_states(iso_a2 = "US") |>
     filter(name == "Pennsylvania")
   
-  region_boundary_proj <- st_transform(region_boundary, st_crs(metrics))
+  region_boundary_proj <- st_transform(region_boundary, st_crs(product_raster))
   
   region_boundary_vect <- region_boundary |>
-    st_transform(st_crs(metrics)) |>
+    st_transform(st_crs(product_raster)) |>
     vect()
   
-  #metrics_pa <- crop(metrics, pa_boundary)
-  
   #crop to region, set value of cells outside of boundaries to NA
-  metrics_pa <- metrics |> 
+  product_raster_pa <- product_raster |> 
     crop(region_boundary_proj) |> 
     mask(region_boundary_proj)
   
-  #plot(metrics_pa)
+  #plot(product_raster_pa)
   
-  # ggplot() +
-  #   geom_spatraster(data = metrics_pa)
+  #take average
+  product_raster_pa <- mean(product_raster_pa, na.rm = TRUE)
+  
+  #plot(product_raster_pa)
   
   #reproject raster to crs that fits region better
   region_centroid <- region_boundary |> 
@@ -62,24 +62,23 @@ pull_ebird_metrics <- function(species_name, metric, region){
                      " +lon_0=", region_centroid[1])
   
   # transform to the custom projection using nearest neighbor resampling
-  metrics_pa_laea <- project(metrics_pa, crs_laea, method = "near") |> 
+  product_raster_pa_laea <- project(product_raster_pa, crs_laea, method = "near") |> 
     # remove areas of the raster containing no data
     trim()
   
   # map the cropped and projected data
-  #plot(abd_pa_laea, axes = FALSE, breakby = "cases")
+  #plot(product_raster_pa_laea, axes = FALSE, breakby = "cases")
   
   # ggplot() +
   #   geom_spatraster(data = abd_pa_laea) +
   #   scale_fill_viridis_c()
   
-  metrics_df <- metrics_pa_laea |> 
+  product_df <- product_raster_pa_laea |> 
     as.data.frame(xy = TRUE) |> 
     as_tibble() |> 
-    mutate(species_name = species_name) |> 
-    rename(metric = full_year) |> 
-    select(species_name, x, y, metric)
+    mutate(common_name = common_name) |> 
+    rename(prop_pop = mean) |> 
+    select(common_name, x, y, prop_pop)
   
-  metrics_df
-  
+  product_df
 }
