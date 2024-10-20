@@ -52,12 +52,12 @@ species_vec <- c("amecro")
 # 
 #ebirdst_download_status(species = "amecro", download_all = TRUE, dry_run = TRUE)
 
-metrics_list <- pmap(list(species_vec_all, "proportion-population", "3km", "Pennsylvania"), pull_ebird_metrics)
+#metrics_list <- pmap(list(species_vec_all, "proportion-population", "3km", "Pennsylvania"), pull_ebird_metrics)
 
-metrics_df <- list_rbind(metrics_list)
+#metrics_df <- list_rbind(metrics_list)
 
-metrics_df |>
-   write_csv("output/combined_ebird_metrics.csv")
+# metrics_df |>
+#    write_csv("output/combined_ebird_metrics.csv")
 
 metrics_df <- read_csv("output/combined_ebird_metrics.csv")
 
@@ -83,6 +83,9 @@ occuring_species <- metrics_df |>
   arrange(desc(zero_pct))
 
 occuring_species
+
+occuring_species |> 
+  write_csv("output/species_occur_pa.csv")
 
 metrics_df <- metrics_df |> 
   semi_join(occuring_species)
@@ -207,13 +210,15 @@ clusterings |>
   scale_x_continuous(breaks = c(1:nclust)) +
   scale_y_reverse()
 
+nclust_kmeans <- 9
+
 p1 <- assignments |> 
   ggplot(aes(x, y)) +
   geom_point(aes(color = .cluster), alpha = 0.8) + 
   facet_wrap(~ k)
 p1
 
-kclust <- kmeans(metrics_df_noloc, centers = 7)
+kclust <- kmeans(metrics_df_noloc, centers = nclust_kmeans)
 
 tidy(kclust) |> select(size, withinss, cluster) |> arrange(desc(size))
 
@@ -222,13 +227,13 @@ cluster_geo <- augment(kclust, metrics_df_scaled_wide) |>
 
 #custom_palette <- c(RColorBrewer::brewer.pal(12, "Paired"), "grey")
 
-custom_palette_kmeans <- RColorBrewer::brewer.pal(7, "Paired")
+custom_palette_kmeans <- RColorBrewer::brewer.pal(nclust_kmeans, "Paired")
 
 kmeans_map <- cluster_geo |> 
   ggplot(aes(x, y, fill = .cluster)) +
   geom_tile() +
   scale_fill_manual(values = custom_palette_kmeans) +
-  labs(title = "Types of habitat inferred from bird species abundance",
+  labs(title = "Types of habitat inferred from species proportion of population",
        subtitle = "Clusters determined by kmeans algorithm",
        caption = "Data from eBird Status and Trends",
        fill = "Cluster") +
@@ -263,8 +268,8 @@ kmeans_map_facet <- cluster_geo |>
   ggplot(aes(x, y, fill = .cluster)) +
   geom_tile(data = blank_tiles, aes(x, y), inherit.aes = FALSE, fill = "light grey", alpha = .5) +
   geom_tile() +
-  scale_fill_manual(values = custom_palette) +
-  labs(title = "Types of habitat inferred from bird species abundance",
+  scale_fill_manual(values = custom_palette_kmeans) +
+  labs(title = "Types of habitat inferred from species proportion of population",
        subtitle = "Clusters determined by kmeans algorithm",
        caption = "Data from eBird Status and Trends") +
   guides(fill = "none") +
@@ -309,8 +314,10 @@ wss_plot$data |>
 #   pluck(1) |> 
 #   plot()
 
+nclust_hclust <- 9
+
 hc_spec <- hier_clust(
-  num_clusters = 6,
+  num_clusters = nclust_hclust,
   linkage_method = "ward"
 )
 
@@ -344,13 +351,13 @@ hclust_geo <- metrics_df_scaled_wide |>
 
 #custom_palette_hclust <- c(RColorBrewer::brewer.pal(9, "Paired"), "dark grey", "black")
 
-custom_palette_hclust <- RColorBrewer::brewer.pal(6, "Paired")
+custom_palette_hclust <- RColorBrewer::brewer.pal(nclust_hclust, "Paired")
 
 hclust_map <- hclust_geo |> 
   ggplot(aes(x, y, fill = .cluster)) +
   geom_tile() +
   scale_fill_manual(values = custom_palette_hclust) +
-  labs(title = "Types of habitat inferred from bird species abundance",
+  labs(title = "Types of habitat inferred from species proportion of population",
        subtitle = "Clusters determined by hclust algorithm",
        caption = "Data from eBird Status and Trends",
        fill = "Cluster") +
@@ -371,7 +378,7 @@ hclust_map_facet <- hclust_geo |>
   geom_tile() +
   scale_fill_manual(values = custom_palette_hclust) +
   facet_wrap(vars(.cluster)) +
-  labs(title = "Types of habitat inferred from bird species abundance",
+  labs(title = "Types of habitat inferred from species proportion of population",
        subtitle = "Clusters determined by hclust algorithm",
        caption = "Data from eBird Status and Trends") +
   guides(fill = "none") +
@@ -387,8 +394,26 @@ hclust_map_facet
 ggsave("output/hclust_map_facet.png", hclust_map_facet, width = 20, height = 12, dpi = 300)
 
 #GMM
+gmm_kclust <- tibble(kclust = 1:10,
+                     data = list(metrics_df_noloc)) |> 
+  mutate(gmm_res = purrr::map2(data, kclust, ~Mclust(data = .x, G = .y)),
+         gmm_metrics = purrr::map(gmm_res, glance))
+
+gmm_kclust |> 
+  unnest(gmm_metrics) |> 
+  ggplot(aes(x = kclust, y = BIC)) +
+  geom_line() +
+  geom_point() +
+  #scale_y_reverse() +
+  scale_x_continuous(breaks = c(1:10))
+
+nclust_gmm <- gmm_kclust |> 
+  unnest(gmm_metrics) |> 
+  filter(BIC == min(BIC)) |> 
+  pull(kclust)
+
 tictoc::tic()
-m <- Mclust(abundance_df_noloc, G = 5)
+m <- Mclust(metrics_df_noloc, G = nclust_gmm)
 tictoc::toc()
 
 m
@@ -397,7 +422,7 @@ tidy(m)
 
 glance(m)
 
-gmm_clust <- augment(m, abundance_df_wide)
+gmm_clust <- augment(m, metrics_df_scaled_wide)
 
 gmm_clust |> 
   summarize(.uncertainty = mean(.uncertainty),
@@ -422,8 +447,6 @@ gmm_clust |>
   scale_alpha_continuous(range = c(1, .1)) +
   theme_void()
 
-
-
 gmm_clust |> 
   select(x, y, .class, .uncertainty) |> 
   ggplot(aes(x, y, fill = .uncertainty)) +
@@ -431,13 +454,13 @@ gmm_clust |>
   scale_fill_viridis_c() +
   theme_void()
 
-custom_palette_gmm <- RColorBrewer::brewer.pal(5, "Paired")
+custom_palette_gmm <- RColorBrewer::brewer.pal(nclust_gmm, "Paired")
 
 gmm_map <- gmm_clust |> 
   ggplot(aes(x, y, fill = .class)) +
   geom_tile() +
   scale_fill_manual(values = custom_palette_gmm) +
-  labs(title = "Types of habitat inferred from bird species abundance",
+  labs(title = "Types of habitat inferred from species proportion of population",
        subtitle = "Clusters determined by GMM algorithm",
        caption = "Data from eBird Status and Trends",
        fill = "Cluster") +
@@ -458,7 +481,7 @@ gmm_map_facet <- gmm_clust |>
   geom_tile() +
   scale_fill_manual(values = custom_palette_gmm) +
   facet_wrap(vars(.class)) +
-  labs(title = "Types of habitat inferred from bird species abundance",
+  labs(title = "Types of habitat inferred from species proportion of population",
        subtitle = "Clusters determined by GMM algorithm",
        caption = "Data from eBird Status and Trends") +
   guides(fill = "none") +
