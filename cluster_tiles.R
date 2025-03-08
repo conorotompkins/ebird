@@ -12,8 +12,29 @@ library(workflows)
 library(parsnip)
 library(tidyclust)
 library(factoextra)
+library(clValid)
 
-set.seed(1234)
+set.seed(123)
+
+nclust <- 10
+
+#https://medium.com/@ozturkfemre/unsupervised-learning-determination-of-cluster-number-be8842cdb11
+fviz_dunn <- function(data, nclust) {
+  k <- c(2:nclust)
+  dunnin <- c()
+  for (i in 2:nclust) {
+    dunnin[i] <- dunn(distance = dist(data), clusters = kmeans(data, i)$cluster)
+  }
+  dunnin <- dunnin[2:nclust]
+  plot(k, dunnin, xlab =  "Cluster number k",
+       ylab = "Dunn Index",
+       main = "Dunn Plot", cex.main=1,
+       col = "dodgerblue1", cex = 0.9 ,
+       lty=1 , type="o" , lwd=1, pch=4,
+       bty = "l",
+       las = 1, cex.axis = 0.8, tcl  = -0.2)
+  abline(v=which(dunnin==max(dunnin)) + 1, lwd=1, col="red", lty="dashed")
+}
 
 source("scripts/pull_ebirdst_metrics.R")
 
@@ -122,14 +143,20 @@ metrics_df_scaled |>
   facet_wrap(vars(common_name)) +
   scale_fill_viridis_c()
 
-metrics_df_scaled_wide <- metrics_df_scaled |> 
+metrics_df_wide <- metrics_df_scaled |> 
   select(common_name, x, y, prop_pop) |> 
   pivot_wider(names_from = common_name, values_from = prop_pop)
 
-metrics_df_noloc <- select(metrics_df_scaled_wide, -c(x, y))
+metrics_df_noloc <- select(metrics_df_wide, -c(x, y))
 
 pca_fit <- metrics_df_noloc %>% 
   prcomp(scale = TRUE) # do PCA on scaled data
+
+pca_fit %>%
+  tidy(matrix = "eigenvalues") %>%
+  ggplot(aes(PC, percent)) +
+  geom_col() +
+  scale_x_continuous(limits = c(0, 10))
 
 pca_fit %>%
   tidy(matrix = "rotation")
@@ -174,18 +201,16 @@ metrics_df_noloc |>
   select(all_of(pull(sampled_sp, common_name))) |> 
   GGally::ggpairs(lower = list(continuous = my_fn))
 
-## clustering
+## clustering ----
 
-#kmeans
-nclust <- 20
-
+#kmeans ----
 kclusts <- 
   tibble(k = 1:nclust) %>%
   mutate(
     kclust = purrr::map(k, ~kmeans(metrics_df_noloc, .x)),
     tidied = purrr::map(kclust, tidy),
     glanced = purrr::map(kclust, glance),
-    augmented = purrr::map(kclust, augment, metrics_df_scaled_wide)
+    augmented = purrr::map(kclust, augment, metrics_df_wide)
   )
 
 clusters <- kclusts |>
@@ -202,15 +227,39 @@ ggplot(clusterings, aes(k, tot.withinss)) +
   geom_point() +
   scale_x_continuous(breaks = c(1:nclust))
 
-clusterings |> 
-  mutate(diff = (tot.withinss - lag(tot.withinss)) / tot.withinss) |>
-  ggplot(aes(k, diff)) +
-  geom_line() +
-  geom_point() +
-  scale_x_continuous(breaks = c(1:nclust)) +
-  scale_y_reverse()
+kmeans_wss_plot <- fviz_nbclust(metrics_df_noloc, FUN = kmeans, method = "wss", k.max = 20)
 
-nclust_kmeans <- 9
+kmeans_wss_plot
+
+kmeans_silhouette_plot <- fviz_nbclust(metrics_df_noloc, # data
+                                       kmeans, # clustering algorithm
+                                       method = "silhouette") # silhouette
+
+kmeans_silhouette_plot
+
+fviz_dunn(metrics_df_noloc, nclust = 5)
+
+k <- c(2:5)
+dunnin <- c()
+for (i in 2:5) {
+  dunnin[i] <- dunn(distance = dist(metrics_df_noloc), clusters = kmeans(metrics_df_noloc, i)$cluster)
+}
+dunnin <- dunnin[2:5]
+
+dunnin_df <- tibble(k = k,
+                    dunn = dunnin)
+
+ggplot(dunnin_df, aes(k, dunnin)) +
+  geom_line()
+
+plot(k, dunnin, xlab =  "Cluster number k",
+     ylab = "Dunn Index",
+     main = "Dunn Plot", cex.main=1,
+     col = "dodgerblue1", cex = 0.9 ,
+     lty=1 , type="o" , lwd=1, pch=4,
+     bty = "l",
+     las = 1, cex.axis = 0.8, tcl  = -0.2)
+abline(v=which(dunnin==max(dunnin)) + 1, lwd=1, col="red", lty="dashed")
 
 p1 <- assignments |> 
   ggplot(aes(x, y)) +
@@ -218,12 +267,28 @@ p1 <- assignments |>
   facet_wrap(~ k)
 p1
 
-kclust <- kmeans(metrics_df_noloc, centers = nclust_kmeans)
+nclust_kmeans <- 5
+
+kmeans_spec <- k_means(num_clusters = nclust_kmeans)
+
+kclust <- kmeans_spec |> 
+  fit(~ .,
+      data = metrics_df_noloc
+  )
+
+kclust
+
+#kclust <- kmeans(metrics_df_noloc, centers = nclust_kmeans)
 
 tidy(kclust) |> select(size, withinss, cluster) |> arrange(desc(size))
 
-cluster_geo <- augment(kclust, metrics_df_scaled_wide) |> 
-  mutate(.cluster = fct_infreq(.cluster))
+#metrics
+#sse_total
+kclust$betweenss / kclust$totss
+
+cluster_geo <- metrics_df_wide |> 
+  bind_cols(extract_cluster_assignment(kclust)) |> 
+  select(.cluster, everything())
 
 #custom_palette <- c(RColorBrewer::brewer.pal(12, "Paired"), "grey")
 
@@ -248,6 +313,23 @@ kmeans_map
 
 ggsave("output/kmeans_map.png", kmeans_map, width = 20, height = 12, dpi = 300)
 
+global_avg <- metrics_df |> 
+  summarize(prop_pop_global_mean = mean(prop_pop),
+            .by = c(common_name))
+
+global_avg
+
+cluster_avg <- cluster_geo |> 
+  pivot_longer(cols = -c(x, y, .cluster), names_to = "common_name") |> 
+  summarize(cluster_avg = mean(value),
+            .by = c(.cluster, common_name))
+
+cluster_avg |> 
+  left_join(global_avg) |> 
+  mutate(diff = cluster_avg - prop_pop_global_mean) |> 
+  group_by(.cluster) |> 
+  slice_max(order_by = diff, n = 3)
+
 cluster_geo |> 
   pivot_longer(cols = -c(x, y, .cluster)) |> 
   summarize(value = mean(value), .by = c(.cluster, name)) |> 
@@ -257,10 +339,10 @@ cluster_geo |>
   ungroup() |> 
   select(-value) |> 
   pivot_wider(names_from = .cluster, values_from = name) |> 
-  unnest(everything()) |> 
-  view()
+  unnest(everything()) #|> 
+#view()
 
-blank_tiles <- metrics_df_scaled_wide |>
+blank_tiles <- metrics_df_wide |>
   distinct(x, y)
 
 kmeans_map_facet <- cluster_geo |> 
@@ -284,17 +366,18 @@ kmeans_map_facet
 
 ggsave("output/kmeans_map_facet.png", width = 20, height = 12, dpi = 300)
 
-#hierarchical
-wss_plot <- fviz_nbclust(metrics_df_noloc, FUN = hcut, method = "wss", k.max = 20)
+#hierarchical ----
+hclust_wss_plot <- fviz_nbclust(metrics_df_noloc, FUN = hcut, method = "wss", k.max = 20)
 
-wss_plot
+hclust_wss_plot
 
-wss_plot$data |> 
-  mutate(diff = (y - lag(y)) / y) |> 
-  ggplot(aes(clusters, diff, group = 1)) +
-  geom_line() +
-  geom_point() +
-  scale_y_reverse()
+hclust_silhouette_plot <- fviz_nbclust(metrics_df_noloc, # data
+                                       hcut, # clustering algorithm
+                                       method = "silhouette") # silhouette
+
+hclust_silhouette_plot
+
+fviz_dunn(metrics_df_noloc, nclust = 10)
 
 # hclust_kclusts <- tibble(k = 1:2) %>%
 #   mutate(
@@ -314,7 +397,7 @@ wss_plot$data |>
 #   pluck(1) |> 
 #   plot()
 
-nclust_hclust <- 9
+nclust_hclust <- 4
 
 hc_spec <- hier_clust(
   num_clusters = nclust_hclust,
@@ -344,7 +427,7 @@ hc_preds <- extract_cluster_assignment(hc_fit)
 
 #hc_preds <- hc_fit %>% predict(abundance_df_wide)
 
-hclust_geo <- metrics_df_scaled_wide |> 
+hclust_geo <- metrics_df_wide |> 
   select(x, y) |> 
   bind_cols(hc_preds) |> 
   mutate(.cluster = fct_infreq(.cluster))
@@ -422,7 +505,7 @@ tidy(m)
 
 glance(m)
 
-gmm_clust <- augment(m, metrics_df_scaled_wide)
+gmm_clust <- augment(m, metrics_df_wide)
 
 gmm_clust |> 
   summarize(.uncertainty = mean(.uncertainty),
