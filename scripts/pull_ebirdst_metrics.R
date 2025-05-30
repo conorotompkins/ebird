@@ -27,9 +27,6 @@ pull_ebird_metrics <- function(common_name, metric, resolution, region){
   
   product_raster
   
-  #get maximum
-  product_raster <- max(product_raster, na.rm = TRUE)
-  
   #get regional boundaries
   region_boundary <- ne_states(iso_a2 = "US") |>
     filter(name == "Pennsylvania")
@@ -48,7 +45,7 @@ pull_ebird_metrics <- function(common_name, metric, resolution, region){
   #plot(product_raster_pa)
   
   #get maximum
-  #product_raster_pa <- max(product_raster_pa, na.rm = TRUE)
+  product_raster_pa <- max(product_raster_pa, na.rm = TRUE)
   
   #plot(product_raster_pa)
   
