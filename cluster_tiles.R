@@ -1,3 +1,4 @@
+#setup ----
 library(tidyverse)
 library(fields)
 library(rnaturalearth)
@@ -38,6 +39,7 @@ fviz_dunn <- function(data, nclust) {
 
 source("scripts/pull_ebirdst_metrics.R")
 
+#load data ----
 species_vec_all <- ebirdst::ebirdst_runs |> 
   filter(is_resident == FALSE) |> 
   filter(breeding_quality == 3, nonbreeding_quality == 3) |> 
@@ -73,15 +75,16 @@ species_vec <- c("amecro")
 # 
 #ebirdst_download_status(species = "amecro", download_all = TRUE, dry_run = TRUE)
 
-#metrics_list <- pmap(list(species_vec_all, "proportion-population", "3km", "Pennsylvania"), pull_ebird_metrics)
-
-#metrics_df <- list_rbind(metrics_list)
-
+# metrics_list <- pmap(list(species_vec_all, "proportion-population", "3km", "Pennsylvania"), pull_ebird_metrics)
+# 
+# metrics_df <- list_rbind(metrics_list)
+# 
 # metrics_df |>
-#    write_csv("output/combined_ebird_metrics.csv")
+#   write_csv("output/combined_ebird_metrics.csv")
 
 metrics_df <- read_csv("output/combined_ebird_metrics.csv")
 
+#process data ----
 duplicate_geo <- metrics_df |> 
   group_by(common_name, x, y) |> 
   filter(n() > 1) |>
@@ -114,13 +117,20 @@ metrics_df <- metrics_df |>
 metrics_df_scaled <- metrics_df |> 
   mutate(prop_pop_scaled = prop_pop |> scale() |> as.numeric(),
          prop_pop_rescaled = prop_pop |> scales::rescale(to = c(0, 1)),
-         prop_pop_rescaled_log10 = log10(prop_pop_rescaled + 1), .by = common_name)
+         prop_pop_log10 = log10(prop_pop_rescaled + 1), .by = common_name)
 
 metrics_df_scaled |> 
-  filter(is.nan(prop_pop_rescaled_log10)) |> 
+  filter(is.nan(prop_pop_log10)) |> 
   nrow() == 0
 
 test_sp <- c("Dark-eyed Junco", "Field Sparrow", "Common Grackle", "Snow Goose", "American Crow")
+
+metrics_df_scaled |>
+  filter(common_name %in% test_sp[4]) |> 
+  ggplot(aes(x, y, fill = prop_pop)) +
+  geom_tile() +
+  facet_wrap(vars(common_name)) +
+  scale_fill_viridis_c()
 
 metrics_df_scaled |>
   filter(common_name %in% test_sp) |> 
@@ -138,14 +148,14 @@ metrics_df_scaled |>
 
 metrics_df_scaled |>
   filter(common_name %in% test_sp) |> 
-  ggplot(aes(x, y, fill = prop_pop_rescaled_log10)) +
+  ggplot(aes(x, y, fill = prop_pop_log10)) +
   geom_tile() +
   facet_wrap(vars(common_name)) +
   scale_fill_viridis_c()
 
 metrics_df_wide <- metrics_df_scaled |> 
-  select(common_name, x, y, prop_pop) |> 
-  pivot_wider(names_from = common_name, values_from = prop_pop)
+  select(common_name, x, y, prop_pop_log10) |> 
+  pivot_wider(names_from = common_name, values_from = prop_pop_log10)
 
 metrics_df_noloc <- select(metrics_df_wide, -c(x, y))
 
@@ -163,25 +173,93 @@ pca_fit %>%
 
 # define arrow style for plotting
 arrow_style <- arrow(
-  angle = 20, ends = "first", type = "closed", length = grid::unit(8, "pt")
+  angle = 20, ends = "first", type = "closed", length = grid::unit(3, "pt")
 )
 
 # plot rotation matrix
-pca_fit %>%
+pca_rot <- pca_fit %>%
   tidy(matrix = "rotation") %>%
-  pivot_wider(names_from = "PC", names_prefix = "PC", values_from = "value") %>%
-  #semi_join(random_birds, by = c("column" = "common_name")) |> 
+  pivot_wider(names_from = "PC", names_prefix = "PC", values_from = "value") |> 
+  rename(common_name = column)
+
+pca_rot |> 
+  select(common_name, PC1:PC3) |> 
+  pivot_longer(-common_name) |> 
+  ggplot(aes(value)) +
+  geom_histogram() +
+  facet_wrap(vars(name), scales = "free_y", ncol = 1)
+
+pca_outliers <- pca_rot |>
+  filter(PC1 == max(PC1) | PC2 == max(PC2) | PC3 == max(PC3) | PC1 == min(PC1) | PC2 == min(PC2) | PC3 == min(PC3))
+
+pca_outliers_max <- pca_rot |> 
+  select(common_name, PC1:PC3) |> 
+  pivot_longer(-common_name) |> 
+  group_by(name) |> 
+  slice_max(order_by = value, n = 3) |> 
+  ungroup() |> 
+  distinct(common_name)
+
+pca_outliers_min <- pca_rot |> 
+  select(common_name, PC1:PC3) |> 
+  pivot_longer(-common_name) |> 
+  group_by(name) |> 
+  slice_min(order_by = value, n = 3) |> 
+  ungroup() |> 
+  distinct(common_name)
+
+pca_outliers <- bind_rows(pca_outliers_max, pca_outliers_min) |> 
+  left_join(pca_rot)
+
+pca_rot %>%
   ggplot(aes(PC1, PC2)) +
-  geom_segment(xend = 0, yend = 0, arrow = arrow_style) +
-  geom_text(
-    aes(label = column),
-    hjust = 1, nudge_x = -0.02, 
+  geom_segment(xend = 0, yend = 0, arrow = arrow_style, lwd = .2) +
+  geom_point(
+    data = pca_outliers,
     color = "#904C2F"
   ) +
-  #xlim(-1, 1) + ylim(-1, 1) +
-  #coord_fixed() + # fix aspect ratio to 1:1
+  ggrepel::geom_label_repel(
+    data = pca_outliers,
+    aes(label = common_name),
+    color = "#904C2F"
+  ) +
   tune::coord_obs_pred() +
-  cowplot::theme_minimal_grid(12)
+  theme_bw()
+
+pca_rot %>%
+  ggplot(aes(PC1, PC3)) +
+  geom_segment(xend = 0, yend = 0, arrow = arrow_style, lwd = .2) +
+  geom_point(
+    data = pca_outliers,
+    color = "#904C2F"
+  ) +
+  ggrepel::geom_label_repel(
+    data = pca_outliers,
+    aes(label = common_name),
+    color = "#904C2F"
+  ) +
+  tune::coord_obs_pred() +
+  theme_bw()
+
+pca_rot %>%
+  ggplot(aes(PC1, PC3)) +
+  geom_segment(xend = 0, yend = 0, arrow = arrow_style, lwd = .2) +
+  geom_point(
+    data = pca_outliers,
+    color = "#904C2F"
+  ) +
+  ggrepel::geom_label_repel(
+    data = pca_outliers,
+    aes(label = common_name),
+    color = "#904C2F"
+  ) +
+  ggrepel::geom_label_repel(
+    data = pca_rot |> filter(common_name == "Snow Goose"),
+    aes(label = common_name),
+    color = "blue"
+  ) +
+  tune::coord_obs_pred() +
+  theme_bw()
 
 my_fn <- function(data, mapping, ...){
   # Using default ggplot density function
@@ -193,17 +271,17 @@ my_fn <- function(data, mapping, ...){
 }
 
 sampled_sp <- metrics_df_scaled |> 
-  select(common_name, prop_pop) |> 
-  summarize(mean = mean(prop_pop), .by = common_name) |> 
+  select(common_name, prop_pop_log10) |> 
+  summarize(mean = mean(prop_pop_log10), .by = common_name) |> 
   dplyr::slice_sample(n = 10, weight_by = mean)
 
 metrics_df_noloc |>
   select(all_of(pull(sampled_sp, common_name))) |> 
   GGally::ggpairs(lower = list(continuous = my_fn))
 
-## clustering ----
+#clustering ----
 
-#kmeans ----
+##kmeans ----
 kclusts <- 
   tibble(k = 1:nclust) %>%
   mutate(
@@ -227,7 +305,7 @@ ggplot(clusterings, aes(k, tot.withinss)) +
   geom_point() +
   scale_x_continuous(breaks = c(1:nclust))
 
-kmeans_wss_plot <- fviz_nbclust(metrics_df_noloc, FUN = kmeans, method = "wss", k.max = 20)
+kmeans_wss_plot <- fviz_nbclust(metrics_df_noloc, FUN = kmeans, method = "wss", k.max = 10)
 
 kmeans_wss_plot
 
@@ -267,27 +345,27 @@ p1 <- assignments |>
   facet_wrap(~ k)
 p1
 
-nclust_kmeans <- 5
+nclust_kmeans <- 4
 
 kmeans_spec <- k_means(num_clusters = nclust_kmeans)
 
-kclust <- kmeans_spec |> 
+kclust_fit <- kmeans_spec |> 
   fit(~ .,
       data = metrics_df_noloc
   )
 
-kclust
-
-#kclust <- kmeans(metrics_df_noloc, centers = nclust_kmeans)
-
-tidy(kclust) |> select(size, withinss, cluster) |> arrange(desc(size))
-
 #metrics
-#sse_total
-kclust$betweenss / kclust$totss
+
+str(kclust_fit, max.level = 1)
+
+kclust_fit |> sse_ratio()
+
+kmeans_summary <- extract_fit_summary(kclust_fit)
+
+kclust_fit |> sse_within()
 
 cluster_geo <- metrics_df_wide |> 
-  bind_cols(extract_cluster_assignment(kclust)) |> 
+  bind_cols(extract_cluster_assignment(kclust_fit)) |> 
   select(.cluster, everything())
 
 #custom_palette <- c(RColorBrewer::brewer.pal(12, "Paired"), "grey")
@@ -313,35 +391,48 @@ kmeans_map
 
 ggsave("output/kmeans_map.png", kmeans_map, width = 20, height = 12, dpi = 300)
 
+#compare clusters to global average
 global_avg <- metrics_df |> 
   summarize(prop_pop_global_mean = mean(prop_pop),
             .by = c(common_name))
 
 global_avg
 
-cluster_avg <- cluster_geo |> 
-  pivot_longer(cols = -c(x, y, .cluster), names_to = "common_name") |> 
-  summarize(cluster_avg = mean(value),
-            .by = c(.cluster, common_name))
+centroids_long_kmeans <- kclust_fit |>
+  extract_centroids() |> 
+  pivot_longer(-.cluster, names_to = "common_name", values_to = "cluster_mean") |> 
+  mutate(common_name = str_remove_all(common_name, "\\`"))
 
-cluster_avg |> 
+centroid_vs_global_kmeans <- centroids_long_kmeans |> 
   left_join(global_avg) |> 
-  mutate(diff = cluster_avg - prop_pop_global_mean) |> 
-  group_by(.cluster) |> 
-  slice_max(order_by = diff, n = 3)
+  mutate(diff = cluster_mean - prop_pop_global_mean,
+         diff_abs = abs(diff))
 
-cluster_geo |> 
-  pivot_longer(cols = -c(x, y, .cluster)) |> 
-  summarize(value = mean(value), .by = c(.cluster, name)) |> 
-  arrange(.cluster, desc(value)) |> 
-  group_by(.cluster) |> 
-  slice_head(n = 3) |> 
-  ungroup() |> 
-  select(-value) |> 
-  pivot_wider(names_from = .cluster, values_from = name) |> 
-  unnest(everything()) #|> 
-#view()
+centroid_vs_global_kmeans |> 
+  ggplot(aes(diff_abs)) +
+  geom_histogram()
 
+#what birds are more common in a cluster than average?
+centroid_vs_global_kmeans |> 
+  group_by(.cluster) |> 
+  slice_max(order_by = diff, n = 5) |> 
+  select(.cluster, common_name, diff) |> 
+  arrange(.cluster, desc(diff)) |> 
+  select(-diff) |> 
+  pivot_wider(names_from = .cluster, values_from = common_name) |> 
+  unnest(everything())
+
+#what birds are less common in a cluster than average?
+centroid_vs_global_kmeans |> 
+  group_by(.cluster) |> 
+  slice_min(order_by = diff, n = 5) |> 
+  select(.cluster, common_name, diff) |> 
+  arrange(.cluster, desc(diff)) |> 
+  select(-diff) |> 
+  pivot_wider(names_from = .cluster, values_from = common_name) |> 
+  unnest(everything())
+
+#faceted map
 blank_tiles <- metrics_df_wide |>
   distinct(x, y)
 
@@ -366,8 +457,8 @@ kmeans_map_facet
 
 ggsave("output/kmeans_map_facet.png", width = 20, height = 12, dpi = 300)
 
-#hierarchical ----
-hclust_wss_plot <- fviz_nbclust(metrics_df_noloc, FUN = hcut, method = "wss", k.max = 20)
+##hierarchical ----
+hclust_wss_plot <- fviz_nbclust(metrics_df_noloc, FUN = hcut, method = "wss", k.max = 10)
 
 hclust_wss_plot
 
@@ -397,7 +488,7 @@ fviz_dunn(metrics_df_noloc, nclust = 10)
 #   pluck(1) |> 
 #   plot()
 
-nclust_hclust <- 4
+nclust_hclust <- 3
 
 hc_spec <- hier_clust(
   num_clusters = nclust_hclust,
@@ -411,25 +502,28 @@ hc_fit <- hc_spec %>%
       data = metrics_df_noloc
   )
 
-hc_fit$fit |> str()
+hc_fit$fit |> str(max.level = 1)
 
 hc_fit$fit %>% plot()
 
 hc_summary <- hc_fit %>% extract_fit_summary()
 
-hc_summary %>% str()
+hc_summary %>% str(max.level = 1)
 
+#metrics
 hc_summary$n_members
 
 hc_summary$sse_total
 
-hc_preds <- extract_cluster_assignment(hc_fit)
+hc_fit |> sse_ratio()
+
+hc_assignments <- extract_cluster_assignment(hc_fit)
 
 #hc_preds <- hc_fit %>% predict(abundance_df_wide)
 
 hclust_geo <- metrics_df_wide |> 
   select(x, y) |> 
-  bind_cols(hc_preds) |> 
+  bind_cols(hc_assignments) |> 
   mutate(.cluster = fct_infreq(.cluster))
 
 #custom_palette_hclust <- c(RColorBrewer::brewer.pal(9, "Paired"), "dark grey", "black")
@@ -455,6 +549,42 @@ hclust_map
 
 ggsave("output/hclust_map.png", hclust_map, width = 20, height = 12, dpi = 300)
 
+#compare clusters to global average
+centroids_long_hc <- hc_fit |>
+  extract_centroids() |> 
+  pivot_longer(-.cluster, names_to = "common_name", values_to = "cluster_mean") |> 
+  mutate(common_name = str_remove_all(common_name, "\\`"))
+
+centroid_vs_global_hc <- centroids_long_hc |> 
+  left_join(global_avg) |> 
+  mutate(diff = cluster_mean - prop_pop_global_mean,
+         diff_abs = abs(diff))
+
+centroid_vs_global_hc |> 
+  ggplot(aes(diff_abs)) +
+  geom_histogram()
+
+#what birds are more common in a cluster than average?
+centroid_vs_global_hc |> 
+  group_by(.cluster) |> 
+  slice_max(order_by = diff, n = 5) |> 
+  select(.cluster, common_name, diff) |> 
+  arrange(.cluster, desc(diff)) |> 
+  select(-diff) |> 
+  pivot_wider(names_from = .cluster, values_from = common_name) |> 
+  unnest(everything())
+
+#what birds are less common in a cluster than average?
+centroid_vs_global_hc |> 
+  group_by(.cluster) |> 
+  slice_min(order_by = diff, n = 5) |> 
+  select(.cluster, common_name, diff) |> 
+  arrange(.cluster, desc(diff)) |> 
+  select(-diff) |> 
+  pivot_wider(names_from = .cluster, values_from = common_name) |> 
+  unnest(everything())
+
+#faceted map
 hclust_map_facet <- hclust_geo |> 
   ggplot(aes(x, y, fill = .cluster)) +
   geom_tile(data = blank_tiles, aes(x, y), fill = "light grey", alpha = .5, inherit.aes = FALSE) +
@@ -476,7 +606,8 @@ hclust_map_facet
 
 ggsave("output/hclust_map_facet.png", hclust_map_facet, width = 20, height = 12, dpi = 300)
 
-#GMM
+#GMM ----
+#dont run
 gmm_kclust <- tibble(kclust = 1:10,
                      data = list(metrics_df_noloc)) |> 
   mutate(gmm_res = purrr::map2(data, kclust, ~Mclust(data = .x, G = .y)),
