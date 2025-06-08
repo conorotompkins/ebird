@@ -164,12 +164,14 @@ pca_fit <- metrics_df_noloc %>%
 
 pca_fit %>%
   tidy(matrix = "eigenvalues") %>%
+  filter(PC <= 10) |> 
   ggplot(aes(PC, percent)) +
   geom_col() +
-  scale_x_continuous(limits = c(0, 10))
+  scale_x_continuous(breaks = c(1:10))
 
 pca_fit %>%
-  tidy(matrix = "rotation")
+  tidy(matrix = "rotation") |> 
+  pivot_wider(names_from = "PC", values_from = "value")
 
 # define arrow style for plotting
 arrow_style <- arrow(
@@ -261,6 +263,49 @@ pca_rot %>%
   tune::coord_obs_pred() +
   theme_bw()
 
+#pca on tiles
+tile_df <- metrics_df |> 
+  distinct(x, y) |> 
+  mutate(tile_id = row_number() |> as.character())
+
+tile_pca_fit <- metrics_df |> 
+  left_join(tile_df) |> 
+  select(tile_id, common_name, prop_pop) |> 
+  pivot_wider(names_from = tile_id, values_from = prop_pop) |> 
+  select(-common_name) |> 
+  prcomp(scale = TRUE)
+
+tile_pca_fit %>%
+  tidy(matrix = "eigenvalues") %>%
+  filter(PC <= 10) |> 
+  ggplot(aes(PC, percent)) +
+  geom_col() +
+  scale_x_continuous(breaks = c(1:10))
+
+tile_pca_rot <- tile_pca_fit |> 
+  tidy("rotation") |> 
+  rename(tile_id = column) |> 
+  pivot_wider(names_from = PC, values_from = value, names_prefix = "PC")
+
+tile_df |> 
+  left_join(tile_pca_rot) |> 
+  ggplot(aes(x, y, fill = PC1)) +
+  geom_tile() +
+  scale_fill_viridis_c()
+
+tile_df |> 
+  left_join(tile_pca_rot) |> 
+  ggplot(aes(x, y, fill = PC2)) +
+  geom_tile() +
+  scale_fill_viridis_c()
+
+tile_df |> 
+  left_join(tile_pca_rot) |> 
+  ggplot(aes(x, y, fill = PC3)) +
+  geom_tile() +
+  scale_fill_viridis_c()
+
+#ggpairs plot
 my_fn <- function(data, mapping, ...){
   # Using default ggplot density function
   
