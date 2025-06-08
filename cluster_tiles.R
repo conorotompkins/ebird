@@ -159,17 +159,17 @@ metrics_df_wide <- metrics_df_scaled |>
 
 metrics_df_noloc <- select(metrics_df_wide, -c(x, y))
 
-pca_fit <- metrics_df_noloc %>% 
+pca_fit <- metrics_df_noloc |> 
   prcomp(scale = TRUE) # do PCA on scaled data
 
-pca_fit %>%
-  tidy(matrix = "eigenvalues") %>%
+pca_fit |>
+  tidy(matrix = "eigenvalues") |>
   filter(PC <= 10) |> 
   ggplot(aes(PC, percent)) +
   geom_col() +
   scale_x_continuous(breaks = c(1:10))
 
-pca_fit %>%
+pca_fit |>
   tidy(matrix = "rotation") |> 
   pivot_wider(names_from = "PC", values_from = "value")
 
@@ -179,8 +179,8 @@ arrow_style <- arrow(
 )
 
 # plot rotation matrix
-pca_rot <- pca_fit %>%
-  tidy(matrix = "rotation") %>%
+pca_rot <- pca_fit |>
+  tidy(matrix = "rotation") |>
   pivot_wider(names_from = "PC", names_prefix = "PC", values_from = "value") |> 
   rename(common_name = column)
 
@@ -213,7 +213,7 @@ pca_outliers_min <- pca_rot |>
 pca_outliers <- bind_rows(pca_outliers_max, pca_outliers_min) |> 
   left_join(pca_rot)
 
-pca_rot %>%
+pca_rot |>
   ggplot(aes(PC1, PC2)) +
   geom_segment(xend = 0, yend = 0, arrow = arrow_style, lwd = .2) +
   geom_point(
@@ -228,7 +228,7 @@ pca_rot %>%
   tune::coord_obs_pred() +
   theme_bw()
 
-pca_rot %>%
+pca_rot |>
   ggplot(aes(PC1, PC3)) +
   geom_segment(xend = 0, yend = 0, arrow = arrow_style, lwd = .2) +
   geom_point(
@@ -243,7 +243,7 @@ pca_rot %>%
   tune::coord_obs_pred() +
   theme_bw()
 
-pca_rot %>%
+pca_rot |>
   ggplot(aes(PC1, PC3)) +
   geom_segment(xend = 0, yend = 0, arrow = arrow_style, lwd = .2) +
   geom_point(
@@ -275,8 +275,8 @@ tile_pca_fit <- metrics_df |>
   select(-common_name) |> 
   prcomp(scale = TRUE)
 
-tile_pca_fit %>%
-  tidy(matrix = "eigenvalues") %>%
+tile_pca_fit |>
+  tidy(matrix = "eigenvalues") |>
   filter(PC <= 10) |> 
   ggplot(aes(PC, percent)) +
   geom_col() +
@@ -328,7 +328,7 @@ metrics_df_noloc |>
 
 ##kmeans ----
 kclusts <- 
-  tibble(k = 1:nclust) %>%
+  tibble(k = 1:nclust) |>
   mutate(
     kclust = purrr::map(k, ~kmeans(metrics_df_noloc, .x)),
     tidied = purrr::map(kclust, tidy),
@@ -515,7 +515,7 @@ hclust_silhouette_plot
 
 fviz_dunn(metrics_df_noloc, nclust = 10)
 
-# hclust_kclusts <- tibble(k = 1:2) %>%
+# hclust_kclusts <- tibble(k = 1:2) |>
 #   mutate(
 #     abundance = list(abundance_df_noloc),
 #     kclust = purrr::map(k, ~hier_clust(num_clusters = .x, linkage_method = "ward")),
@@ -542,18 +542,18 @@ hc_spec <- hier_clust(
 
 hc_spec
 
-hc_fit <- hc_spec %>%
+hc_fit <- hc_spec |>
   fit(~ .,
       data = metrics_df_noloc
   )
 
 hc_fit$fit |> str(max.level = 1)
 
-hc_fit$fit %>% plot()
+hc_fit$fit |> plot()
 
-hc_summary <- hc_fit %>% extract_fit_summary()
+hc_summary <- hc_fit |> extract_fit_summary()
 
-hc_summary %>% str(max.level = 1)
+hc_summary |> str(max.level = 1)
 
 #metrics
 hc_summary$n_members
@@ -564,7 +564,7 @@ hc_fit |> sse_ratio()
 
 hc_assignments <- extract_cluster_assignment(hc_fit)
 
-#hc_preds <- hc_fit %>% predict(abundance_df_wide)
+#hc_preds <- hc_fit |> predict(abundance_df_wide)
 
 hclust_geo <- metrics_df_wide |> 
   select(x, y) |> 
