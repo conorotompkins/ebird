@@ -65,7 +65,6 @@ ebirdst::ebirdst_runs |>
   filter(breeding_quality == 3, nonbreeding_quality == 3) |> 
   filter(str_detect(common_name, "Sandpiper|Snipe|Woodcock"))
 
-species_vec <- c("amecro")
 
 # ebirdst_download_status(species = species_vec,
 #                         download_abundance = TRUE,
@@ -82,37 +81,42 @@ species_vec <- c("amecro")
 # metrics_df |>
 #   write_csv("output/combined_ebird_metrics.csv")
 
-metrics_df <- read_csv("output/combined_ebird_metrics.csv")
+#metrics_df <- read_csv("output/combined_ebird_metrics.csv")
 
 #process data ----
-duplicate_geo <- metrics_df |> 
-  group_by(common_name, x, y) |> 
-  filter(n() > 1) |>
-  ungroup() |> 
-  distinct(common_name)
+# duplicate_geo <- metrics_df |> 
+#   group_by(common_name, x, y) |> 
+#   filter(n() > 1) |>
+#   ungroup() |> 
+#   distinct(common_name)
+# 
+# duplicate_geo
+# 
+# metrics_df <- anti_join(metrics_df, duplicate_geo)
+# 
+# metrics_df |> 
+#   summarize(zero_pct = mean(prop_pop == 0),
+#             .by = common_name) |> 
+#   filter(zero_pct == 1)
+# 
+# occuring_species <- metrics_df |> 
+#   summarize(zero_pct = mean(prop_pop == 0),
+#             .by = common_name) |>
+#   filter(zero_pct < 1) |> 
+#   arrange(desc(zero_pct))
+# 
+# occuring_species
+# 
+# occuring_species |> 
+#   write_csv("output/species_occur_pa.csv")
+# 
+# metrics_df <- metrics_df |> 
+#   semi_join(occuring_species)
+# 
+# metrics_df |> 
+#   write_csv("input/species_abundance_present_in_pa.csv")
 
-duplicate_geo
-
-metrics_df <- anti_join(metrics_df, duplicate_geo)
-
-metrics_df |> 
-  summarize(zero_pct = mean(prop_pop == 0),
-            .by = common_name) |> 
-  filter(zero_pct == 1)
-
-occuring_species <- metrics_df |> 
-  summarize(zero_pct = mean(prop_pop == 0),
-            .by = common_name) |>
-  filter(zero_pct < 1) |> 
-  arrange(desc(zero_pct))
-
-occuring_species
-
-occuring_species |> 
-  write_csv("output/species_occur_pa.csv")
-
-metrics_df <- metrics_df |> 
-  semi_join(occuring_species)
+metrics_df <- read_csv("input/species_abundance_present_in_pa.csv")
 
 metrics_df_scaled <- metrics_df |> 
   mutate(prop_pop_scaled = prop_pop |> scale() |> as.numeric(),
@@ -533,7 +537,7 @@ fviz_dunn(metrics_df_noloc, nclust = 10)
 #   pluck(1) |> 
 #   plot()
 
-nclust_hclust <- 3
+nclust_hclust <- 6
 
 hc_spec <- hier_clust(
   num_clusters = nclust_hclust,
