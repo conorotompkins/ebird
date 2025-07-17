@@ -42,7 +42,7 @@ source("scripts/pull_ebirdst_metrics.R")
 #load data ----
 species_vec_all <- ebirdst::ebirdst_runs |> 
   filter(is_resident == FALSE) |> 
-  filter(breeding_quality == 3, nonbreeding_quality == 3) |> 
+  filter(breeding_quality == 3, nonbreeding_quality == 3, postbreeding_migration_quality == 3, prebreeding_migration_quality == 3) |> 
   filter(!str_detect(species_code, "example")) |> 
   pull(common_name)
 
@@ -65,56 +65,47 @@ ebirdst::ebirdst_runs |>
   filter(breeding_quality == 3, nonbreeding_quality == 3) |> 
   filter(str_detect(common_name, "Sandpiper|Snipe|Woodcock"))
 
+metrics_list <- pmap(list(species_vec_all, "proportion-population", "3km", "Pennsylvania"), pull_ebird_metrics)
 
-# ebirdst_download_status(species = species_vec,
-#                         download_abundance = TRUE,
-#                         download_all = TRUE,
-#                         force = TRUE,
-#                         pattern = "proportion-population_median_3km")
-# 
-#ebirdst_download_status(species = "amecro", download_all = TRUE, dry_run = TRUE)
+metrics_df <- list_rbind(metrics_list)
 
-# metrics_list <- pmap(list(species_vec_all, "proportion-population", "3km", "Pennsylvania"), pull_ebird_metrics)
-# 
-# metrics_df <- list_rbind(metrics_list)
-# 
-# metrics_df |>
-#   write_csv("output/combined_ebird_metrics.csv")
+metrics_df |>
+  write_csv("output/combined_ebird_metrics.csv")
 
-#metrics_df <- read_csv("output/combined_ebird_metrics.csv")
+metrics_df <- read_csv("output/combined_ebird_metrics.csv")
 
 #process data ----
-# duplicate_geo <- metrics_df |> 
-#   group_by(common_name, x, y) |> 
-#   filter(n() > 1) |>
-#   ungroup() |> 
-#   distinct(common_name)
-# 
-# duplicate_geo
-# 
-# metrics_df <- anti_join(metrics_df, duplicate_geo)
-# 
-# metrics_df |> 
-#   summarize(zero_pct = mean(prop_pop == 0),
-#             .by = common_name) |> 
-#   filter(zero_pct == 1)
-# 
-# occuring_species <- metrics_df |> 
-#   summarize(zero_pct = mean(prop_pop == 0),
-#             .by = common_name) |>
-#   filter(zero_pct < 1) |> 
-#   arrange(desc(zero_pct))
-# 
-# occuring_species
-# 
-# occuring_species |> 
-#   write_csv("output/species_occur_pa.csv")
-# 
-# metrics_df <- metrics_df |> 
-#   semi_join(occuring_species)
-# 
-# metrics_df |> 
-#   write_csv("input/species_abundance_present_in_pa.csv")
+duplicate_geo <- metrics_df |>
+  group_by(common_name, x, y) |>
+  filter(n() > 1) |>
+  ungroup() |>
+  distinct(common_name)
+
+duplicate_geo
+
+metrics_df <- anti_join(metrics_df, duplicate_geo)
+
+metrics_df |>
+  summarize(zero_pct = mean(prop_pop == 0),
+            .by = common_name) |>
+  filter(zero_pct == 1)
+
+occuring_species <- metrics_df |>
+  summarize(zero_pct = mean(prop_pop == 0),
+            .by = common_name) |>
+  filter(zero_pct < 1.00) |>
+  arrange(desc(zero_pct))
+
+occuring_species
+
+occuring_species |>
+  write_csv("output/species_occur_pa.csv")
+
+metrics_df <- metrics_df |>
+  semi_join(occuring_species)
+
+metrics_df |>
+  write_csv("input/species_abundance_present_in_pa.csv")
 
 metrics_df <- read_csv("input/species_abundance_present_in_pa.csv")
 
