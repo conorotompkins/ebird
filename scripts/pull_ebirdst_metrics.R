@@ -6,8 +6,9 @@ library(terra)
 library(ebirdst)
 library(stars)
 library(tidyterra)
+library(rmapshaper)
 
-pull_ebird_metrics <- function(common_name, metric, resolution, region){
+pull_ebird_metrics <- function(common_name, metric, resolution, regions){
   
   ebirdst_download_status(common_name, dry_run = TRUE)
   
@@ -28,8 +29,11 @@ pull_ebird_metrics <- function(common_name, metric, resolution, region){
   product_raster
   
   #get regional boundaries
-  region_boundary <- ne_states(iso_a2 = "US") |>
-    filter(name == "Pennsylvania")
+  region_boundary <- ne_states(iso_a2 = c("US", "CA")) |> 
+    filter(str_detect(name, regions)) |> 
+    summarize() |> 
+    ms_simplify(keep = .3) |> 
+    st_buffer(9500)
   
   region_boundary_proj <- st_transform(region_boundary, st_crs(product_raster))
   
@@ -37,17 +41,12 @@ pull_ebird_metrics <- function(common_name, metric, resolution, region){
     st_transform(st_crs(product_raster)) |>
     vect()
   
-  #crop to region, set value of cells outside of boundaries to NA
   product_raster_pa <- product_raster |> 
     crop(region_boundary_proj) |> 
     mask(region_boundary_proj)
   
-  #plot(product_raster_pa)
-  
   #get maximum
   product_raster_pa <- max(product_raster_pa, na.rm = TRUE)
-  
-  #plot(product_raster_pa)
   
   #reproject raster to crs that fits region better
   region_centroid <- region_boundary |> 
@@ -67,10 +66,10 @@ pull_ebird_metrics <- function(common_name, metric, resolution, region){
     trim()
   
   # map the cropped and projected data
-  #plot(product_raster_pa_laea, axes = FALSE, breakby = "cases")
-  
+  # plot(product_raster_pa_laea, axes = FALSE, breakby = "cases")
+  # 
   # ggplot() +
-  #   geom_spatraster(data = abd_pa_laea) +
+  #   geom_spatraster(data = product_raster_pa_laea) +
   #   scale_fill_viridis_c()
   
   product_df <- product_raster_pa_laea |> 
@@ -79,6 +78,10 @@ pull_ebird_metrics <- function(common_name, metric, resolution, region){
     mutate(common_name = common_name) |> 
     rename(prop_pop = max) |> 
     select(common_name, x, y, prop_pop)
+  
+  # product_df |> 
+  #   ggplot(aes(x, y, fill = prop_pop)) +
+  #   geom_tile()
   
   product_df
 }
