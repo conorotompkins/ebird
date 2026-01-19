@@ -16,6 +16,7 @@ ebd <- auk_file |>
   # 4. read text file into r data frame
   read_ebd()
 toc()
+#944.459 sec elapsed
 
 glimpse(ebd)
 
